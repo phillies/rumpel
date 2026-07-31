@@ -1,0 +1,43 @@
+app-id: io.lies.rumpel
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+sdk-extensions:
+- org.freedesktop.Sdk.Extension.rust-stable
+command: rumpel
+
+finish-args:
+- --socket=wayland
+- --socket=fallback-x11
+- --device=dri
+- --socket=pulseaudio
+# Required for opening command-line files and moving the active file to Trash.
+- --filesystem=host
+
+# H.264/H.265 decoders come from the ffmpeg extension at runtime
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    version: '25.08'
+    directory: lib/ffmpeg
+    add-ld-path: '.'
+
+cleanup-commands:
+- mkdir -p ${FLATPAK_DEST}/lib/ffmpeg
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/rumpel/cargo
+
+modules:
+- name: rumpel
+  buildsystem: simple
+  build-commands:
+  - cargo --offline fetch --manifest-path Cargo.toml
+  - cargo --offline build --release
+  - install -Dm755 target/release/rumpel ${FLATPAK_DEST}/bin/rumpel
+  - install -Dm644 packaging/rumpel.desktop ${FLATPAK_DEST}/share/applications/io.lies.rumpel.desktop
+  sources:
+  - type: dir
+    path: ..
+  - cargo-sources.json

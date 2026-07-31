@@ -1,0 +1,112 @@
+name: Build release artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git tag to publish"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    name: Debian package
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libgtk-4-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            pkg-config
+
+      - name: Install Debian packager
+        run: cargo install --locked cargo-deb
+
+      - name: Build Debian package
+        run: |
+          cargo build --locked --release
+          cargo deb --no-build
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rumpel-deb
+          path: target/debian/*.deb
+          if-no-files-found: error
+
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rumpel-linux-x86_64
+          path: target/release/rumpel
+          if-no-files-found: error
+
+  rpm:
+    name: RPM package
+    runs-on: ubuntu-latest
+    container: fedora:42
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          dnf install --assumeyes \
+            cargo \
+            gcc \
+            gstreamer1-devel \
+            gstreamer1-plugins-base-devel \
+            gtk4-devel \
+            pkgconf-pkg-config \
+            rust
+
+      - name: Install RPM packager
+        run: cargo install --locked cargo-generate-rpm
+
+      - name: Build RPM package
+        run: |
+          cargo build --locked --release
+          cargo generate-rpm
+
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rumpel-rpm
+          path: target/generate-rpm/*.rpm
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [deb, rpm]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            release-artifacts/rumpel-deb/*.deb \
+            release-artifacts/rumpel-rpm/*.rpm \
+            release-artifacts/rumpel-linux-x86_64/rumpel \
+            --generate-notes

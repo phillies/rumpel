@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>io.lies.rumpel</id>
+    <name>Rumpel</name>
+    <summary>Minimal video player for Linux</summary>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>GPL-3.0-or-later</project_license>
+    <developer id="io.lies">
+        <name>Philipp Lies</name>
+    </developer>
+    <description>
+        <p>Rumpel is a minimal GTK4 and GStreamer video player for Linux. It opens one player window
+            per video and keeps the interface to a single control bar.</p>
+        <p>It provides keyboard folder navigation, media information, scaling controls, and file
+            trashing.</p>
+    </description>
+    <launchable type="desktop-id">io.lies.rumpel.desktop</launchable>
+    <icon type="stock">io.lies.rumpel</icon>
+    <categories>
+        <category>AudioVideo</category>
+        <category>Video</category>
+        <category>Player</category>
+    </categories>
+    <provides>
+        <binary>rumpel</binary>
+    </provides>
+    <url type="homepage">https://github.com/phillies/rumpel</url>
+    <content_rating type="oars-1.1" />
+    <releases>
+        <release version="0.3.0" date="2026-08-01" />
+        <release version="0.2.0" date="2026-07-31" />
+    </releases>
+</component>

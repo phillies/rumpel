@@ -1,0 +1,69 @@
+[package]
+name = "rumpel"
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.92"
+description = "Minimal GTK4/GStreamer video player"
+license = "GPL-3.0-or-later"
+readme = "README.md"
+repository = "https://github.com/phillies/rumpel"
+homepage = "https://github.com/phillies/rumpel"
+keywords = ["video", "player", "gtk4", "gstreamer", "linux"]
+categories = ["multimedia::video", "gui"]
+include = [
+  "src/**",
+  "packaging/**",
+  "Cargo.toml",
+  "Cargo.lock",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "CODE_OF_CONDUCT.md",
+  "SECURITY.md",
+]
+authors = ["Philipp Lies <phil@lies.io>"]
+
+# rpm: cargo install cargo-generate-rpm && cargo build --release && cargo generate-rpm
+[package.metadata.generate-rpm]
+assets = [
+  { source = "target/release/rumpel", dest = "/usr/bin/rumpel", mode = "755" },
+  { source = "packaging/io.lies.rumpel.desktop", dest = "/usr/share/applications/io.lies.rumpel.desktop", mode = "644" },
+  { source = "packaging/io.lies.rumpel.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.lies.rumpel.svg", mode = "644" },
+]
+# ponytail: explicit requires instead of ELF auto-scan; plugins are dlopened so
+# auto-req would miss them anyway. gstreamer1-libav is RPM Fusion, so only a hint.
+auto-req = "no"
+requires = { gtk4 = "*", gstreamer1 = "*", gstreamer1-plugins-good = "*", gstreamer1-plugins-bad-free = "*", gstreamer1-vaapi = "*" }
+
+# deb: cargo install cargo-deb && cargo deb
+[package.metadata.deb]
+extended-description = "A minimal video player for Linux. Seek bar, play/pause/stop, loop, volume/mute, media information, folder navigation, Trash, three scaling modes, one window per video."
+depends = "libgtk-4-1, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-vaapi"
+assets = [
+  [
+    "target/release/rumpel",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "packaging/io.lies.rumpel.desktop",
+    "usr/share/applications/io.lies.rumpel.desktop",
+    "644",
+  ],
+  [
+    "packaging/io.lies.rumpel.metainfo.xml",
+    "usr/share/metainfo/",
+    "644",
+  ],
+  [
+    "packaging/io.lies.rumpel.svg",
+    "usr/share/icons/hicolor/scalable/apps/",
+    "644",
+  ],
+]
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
+gst = { package = "gstreamer", version = "0.25" }
+gst-plugin-gtk4 = { version = "0.15", features = ["waylandegl", "x11egl"] }

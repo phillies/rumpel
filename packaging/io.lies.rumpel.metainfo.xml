@@ -27,6 +27,7 @@
     <url type="homepage">https://github.com/phillies/rumpel</url>
     <content_rating type="oars-1.1" />
     <releases>
+        <release version="0.3.0" date="2026-08-01" />
         <release version="0.2.0" date="2026-07-31" />
     </releases>
 </component>

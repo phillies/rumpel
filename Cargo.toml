@@ -1,6 +1,6 @@
 [package]
 name = "rumpel"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.92"
 description = "Minimal GTK4/GStreamer video player"
@@ -28,7 +28,8 @@ authors = ["Philipp Lies <phil@lies.io>"]
 [package.metadata.generate-rpm]
 assets = [
   { source = "target/release/rumpel", dest = "/usr/bin/rumpel", mode = "755" },
-  { source = "packaging/rumpel.desktop", dest = "/usr/share/applications/rumpel.desktop", mode = "644" },
+  { source = "packaging/io.lies.rumpel.desktop", dest = "/usr/share/applications/io.lies.rumpel.desktop", mode = "644" },
+  { source = "packaging/io.lies.rumpel.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.lies.rumpel.svg", mode = "644" },
 ]
 # ponytail: explicit requires instead of ELF auto-scan; plugins are dlopened so
 # auto-req would miss them anyway. gstreamer1-libav is RPM Fusion, so only a hint.
@@ -46,8 +47,8 @@ assets = [
     "755",
   ],
   [
-    "packaging/rumpel.desktop",
-    "usr/share/applications/",
+    "packaging/io.lies.rumpel.desktop",
+    "usr/share/applications/io.lies.rumpel.desktop",
     "644",
   ],
   [

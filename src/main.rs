@@ -83,6 +83,12 @@ fn fmt_time(t: gst::ClockTime) -> String {
     }
 }
 
+fn version_requested(arguments: impl IntoIterator<Item = String>) -> bool {
+    arguments
+        .into_iter()
+        .any(|argument| argument == "--version")
+}
+
 fn config_path() -> std::path::PathBuf {
     glib::user_config_dir().join("rumpel.conf")
 }
@@ -667,6 +673,11 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
 }
 
 fn main() -> glib::ExitCode {
+    if version_requested(std::env::args().skip(1)) {
+        println!("rumpel {}", env!("CARGO_PKG_VERSION"));
+        return glib::ExitCode::SUCCESS;
+    }
+
     if std::env::var_os("GSK_RENDERER").is_none() {
         std::env::set_var("GSK_RENDERER", "opengl");
     }
@@ -698,8 +709,14 @@ fn main() -> glib::ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{fmt_time, is_video_extension, wrapped_neighbor};
+    use super::{fmt_time, is_video_extension, version_requested, wrapped_neighbor};
     use std::path::PathBuf;
+
+    #[test]
+    fn version_flag_is_recognized() {
+        assert!(version_requested(vec!["--version".into()]));
+        assert!(!version_requested(vec!["movie.mp4".into()]));
+    }
 
     #[test]
     fn config_roundtrip() {

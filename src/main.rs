@@ -511,6 +511,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
             info_label.clone(),
         );
         let key = gtk::EventControllerKey::new();
+        key.set_propagation_phase(gtk::PropagationPhase::Capture);
         let key_window = window.clone();
         key.connect_key_pressed(move |_, key, _, modifiers| {
             if !modifiers.contains(gdk::ModifierType::CONTROL_MASK) {

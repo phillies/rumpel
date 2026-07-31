@@ -37,6 +37,8 @@ modules:
   - cargo --offline build --release
   - install -Dm755 target/release/rumpel ${FLATPAK_DEST}/bin/rumpel
   - install -Dm644 packaging/rumpel.desktop ${FLATPAK_DEST}/share/applications/io.lies.rumpel.desktop
+  - install -Dm644 packaging/io.lies.rumpel.metainfo.xml ${FLATPAK_DEST}/share/metainfo/io.lies.rumpel.metainfo.xml
+  - install -Dm644 packaging/io.lies.rumpel.svg ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/io.lies.rumpel.svg
   sources:
   - type: dir
     path: ..

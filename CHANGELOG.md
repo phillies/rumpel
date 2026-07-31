@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- License the project under GPL-3.0-or-later and add contributor, conduct, and security policies.
+- Add AppStream metadata, an application icon, and tagged GitHub Release publishing.
+
 ## [0.2.0] - 2026-07-31
 
 ### Added

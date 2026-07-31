@@ -68,10 +68,14 @@ cargo build --release
 rumpel movie.mp4
 rumpel first.mp4 second.mkv
 rumpel
+rumpel --version
 ```
 
 With no argument, use the folder control to select a video. Opening a video
 from an occupied window creates a new player window.
+
+`rumpel --version` prints the installed Rumpel version and exits without
+starting the player.
 
 | Shortcut | Action |
 | --- | --- |
@@ -116,6 +120,33 @@ The Flatpak manifest is [packaging/io.lies.rumpel.yml](packaging/io.lies.rumpel.
 It uses pinned sources in [packaging/cargo-sources.json](packaging/cargo-sources.json);
 regenerate that file whenever `Cargo.lock` changes using the
 [Flatpak cargo generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo).
+
+### Flatpak
+
+Flatpak builds require `flatpak` and `flatpak-builder`. Install the builder from
+the host distribution, for example:
+
+```bash
+sudo dnf install flatpak flatpak-builder
+# or: sudo apt install flatpak flatpak-builder
+```
+
+For an offline build, install the manifest's SDK and Rust extension first:
+
+```bash
+flatpak install flathub org.gnome.Sdk//50 org.freedesktop.Sdk.Extension.rust-stable//50
+flatpak-builder --force-clean --disable-download --state-dir=target/flatpak/state target/flatpak/build packaging/io.lies.rumpel.yml
+```
+
+The Flatpak-distributed Builder application is an alternative to a host
+installation. With `org.flatpak.Builder` installed, run the same build through
+its bundled `flatpak-builder` binary:
+
+```bash
+flatpak run --filesystem="$PWD" org.flatpak.Builder --force-clean --disable-download --state-dir=target/flatpak/state target/flatpak/build packaging/io.lies.rumpel.yml
+```
+
+Neither command installs or deploys the resulting Flatpak.
 
 ## Contributing
 

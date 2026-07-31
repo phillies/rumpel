@@ -2,8 +2,26 @@
 name = "rumpel"
 version = "0.2.0"
 edition = "2021"
+rust-version = "1.92"
 description = "Minimal GTK4/GStreamer video player"
-license = "MIT"
+license = "GPL-3.0-or-later"
+readme = "README.md"
+repository = "https://github.com/phillies/rumpel"
+homepage = "https://github.com/phillies/rumpel"
+keywords = ["video", "player", "gtk4", "gstreamer", "linux"]
+categories = ["multimedia::video", "gui"]
+include = [
+  "src/**",
+  "packaging/**",
+  "Cargo.toml",
+  "Cargo.lock",
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "CONTRIBUTING.md",
+  "CODE_OF_CONDUCT.md",
+  "SECURITY.md",
+]
 authors = ["Philipp Lies <phil@lies.io>"]
 
 # rpm: cargo install cargo-generate-rpm && cargo build --release && cargo generate-rpm
@@ -30,6 +48,16 @@ assets = [
   [
     "packaging/rumpel.desktop",
     "usr/share/applications/",
+    "644",
+  ],
+  [
+    "packaging/io.lies.rumpel.metainfo.xml",
+    "usr/share/metainfo/",
+    "644",
+  ],
+  [
+    "packaging/io.lies.rumpel.svg",
+    "usr/share/icons/hicolor/scalable/apps/",
     "644",
   ],
 ]

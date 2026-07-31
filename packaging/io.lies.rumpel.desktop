@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Rumpel
+Comment=Minimal video player
+Exec=/usr/bin/rumpel %U
+Icon=io.lies.rumpel
+Terminal=false
+Categories=AudioVideo;Video;Player;
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;video/x-flv;video/x-ms-wmv;

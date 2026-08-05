@@ -12,21 +12,23 @@ seek bar handles the key before Rumpel's window-level folder-navigation handler
 runs.
 
 ## Root cause
-`src/main.rs` attached the Ctrl-arrow `EventControllerKey` to the window with
-GTK's default propagation phase. A focused `gtk::Scale` processes arrow keys
-first, so the controller never reached the code that calls `folder_videos` and
-`wrapped_neighbor`. The seek action at a media boundary produced the reported
-failure rather than the intended wrapped folder navigation.
+GTK controls can consume Ctrl-arrow shortcuts before the application's key
+controller receives them. Setting the controller to capture phase did not make
+the shortcut reliable in the installed application, so Ctrl-arrow cannot be the
+folder-navigation binding.
 
 ## Fix
-Set the window key controller's propagation phase to `Capture`. It now handles
-Ctrl-arrow before a focused seek bar can consume the event, allowing the
-existing wrapped folder-navigation path to load the adjacent video.
+Use unmodified `Left` and `Right` in the capture-phase key controller. The
+handler ignores modifier shortcuts, preserves `Ctrl+X`, and sends the plain
+arrows through the existing wrapped folder-navigation path.
 
 ## Verification
-`cargo test --locked` passed: 5 tests passed, 0 failed. This includes the
-existing regression coverage for wrapped previous/next folder navigation.
+`cargo fmt --check` passed.
 
-`cargo build --locked` passed.
+`cargo test --locked` passed: 6 tests passed, 0 failed, including the plain
+Left/Right shortcut regression test and wrapped folder-navigation test.
 
-`git diff --check` passed.
+`cargo build --locked --release` passed.
+
+`cargo generate-rpm`, `desktop-file-validate packaging/io.lies.rumpel.desktop`,
+and `git diff --check` passed.

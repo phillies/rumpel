@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Rumpel does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please search
+        [existing issues](https://github.com/phillies/rumpel/issues) first.
+
+        Do not report security vulnerabilities here — follow
+        [SECURITY.md](https://github.com/phillies/rumpel/blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did Rumpel do instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `rumpel clip.mkv`
+        2. Press ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Rumpel version
+      description: Output of `rumpel --version`.
+      placeholder: rumpel 0.3.1
+    validations:
+      required: true
+
+  - type: input
+    id: distribution
+    attributes:
+      label: Distribution and desktop session
+      description: Include whether the session is Wayland or X11.
+      placeholder: Fedora 42, GNOME 48, Wayland
+    validations:
+      required: true
+
+  - type: input
+    id: gstreamer
+    attributes:
+      label: GStreamer version
+      description: Output of `gst-launch-1.0 --version`.
+      placeholder: gst-launch-1.0 version 1.24.10
+    validations:
+      required: true
+
+  - type: input
+    id: install-method
+    attributes:
+      label: How was Rumpel installed?
+      placeholder: .rpm from the releases page / cargo build --release / Flatpak
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal output
+      description: >
+        Anything Rumpel printed. `GST_DEBUG=2 rumpel your-file.mkv` often adds useful
+        detail for playback problems. This is rendered as a code block, so no backticks
+        are needed.
+      render: shell

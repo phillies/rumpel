@@ -1,61 +1,106 @@
+<div align="center">
+
+<img src="packaging/io.lies.rumpel.svg" width="112" alt="Rumpel logo">
+
 # Rumpel
+
 **RU**st **M**edia **P**lay**E**r for **L**inux
 
-Rumpel is a minimal video player for Linux, built with GTK4 and GStreamer. It
-opens one window per video and keeps the player interface to a single control
-bar.
+A minimal GTK4 + GStreamer video player. One window per video, one control bar, nothing else.
 
-Project home: [github.com/phillies/rumpel](https://github.com/phillies/rumpel)
+[![CI](https://github.com/phillies/rumpel/actions/workflows/ci.yml/badge.svg)](https://github.com/phillies/rumpel/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/phillies/rumpel?color=blue)](https://github.com/phillies/rumpel/releases/latest)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+[![Rust 1.92+](https://img.shields.io/badge/rust-1.92%2B-orange?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Platform: Linux](https://img.shields.io/badge/platform-Linux-lightgrey?logo=linux&logoColor=white)](#installation)
 
-## Features
+<!-- Screenshot goes here once captured:
+<img src="docs/screenshot.png" width="720" alt="Rumpel playing a video with the media-information overlay open">
+-->
 
-- Play one or more video files, with one player window for each file.
-- Seek, play, pause, stop, loop, mute, and change volume.
-- Scale video to fit, stretch, or cover the window.
-- Browse neighbouring videos in the active file's directory.
-- Move the active video to the desktop Trash.
-- Inspect available audio and video stream details.
+</div>
+
+---
+
+## Why Rumpel?
+
+Most video players want to be a media library. Rumpel wants to show you the file you
+double-clicked and get out of the way.
+
+- **One window per video.** Open five files, get five windows. No playlist, no queue.
+- **One control bar.** Seek, play/pause, stop, loop, mute, volume, scaling, open, info.
+- **Folder-native.** <kbd>←</kbd> / <kbd>→</kbd> walk the videos next to the current file, and
+  <kbd>Ctrl</kbd>+<kbd>X</kbd> trashes the current one and moves on — a fast way to triage a
+  directory of clips.
+- **Nothing to configure.** Mute and loop are remembered; everything else is a click.
+
+Deliberately out of scope: playlists, a media library, a subtitle UI, streaming URLs, and a
+settings dialog.
 
 ## Installation
 
-Release packages are not published yet. Build a package from source, or run
-Rumpel directly with Cargo.
+### Download a release
+
+Prebuilt `.deb`, `.rpm`, and a bare `x86_64` binary are attached to
+[the latest release](https://github.com/phillies/rumpel/releases/latest).
+
+```bash
+# Debian / Ubuntu
+sudo apt install ./rumpel_*_amd64.deb
+
+# Fedora
+sudo dnf install ./rumpel-*.x86_64.rpm
+```
 
 ### Runtime dependencies
 
-Fedora:
+<details>
+<summary><b>Fedora</b></summary>
 
 ```bash
-sudo dnf install gtk4 gstreamer1 gstreamer1-plugins-good gstreamer1-plugins-bad-free gstreamer1-libav gstreamer1-vaapi
+sudo dnf install gtk4 gstreamer1 gstreamer1-plugins-good \
+  gstreamer1-plugins-bad-free gstreamer1-libav gstreamer1-vaapi
 ```
 
-Debian/Ubuntu:
+</details>
+
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
 
 ```bash
-sudo apt install libgtk-4-1 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-vaapi
+sudo apt install libgtk-4-1 gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-vaapi
 ```
 
-`*-libav` provides common H.264/H.265 software decoders. On Fedora it is
-available from [RPM Fusion](https://rpmfusion.org/). `*-vaapi` enables hardware
-decoding on supported GPUs. Codec availability can vary by distribution and
-region.
+</details>
+
+`*-libav` provides common H.264/H.265 software decoders; on Fedora it comes from
+[RPM Fusion](https://rpmfusion.org/). `*-vaapi` enables hardware decoding on supported GPUs.
+Codec availability varies by distribution and region.
 
 ### Build from source
 
-Rumpel requires Rust 1.92 or newer, GTK4 development files, and GStreamer
-development files.
+Requires Rust 1.92 or newer, plus GTK4 and GStreamer development files.
 
-Fedora:
-
-```bash
-sudo dnf install gtk4-devel gstreamer1-devel gstreamer1-plugins-base-devel pkgconf-pkg-config
-```
-
-Debian/Ubuntu:
+<details>
+<summary><b>Fedora</b></summary>
 
 ```bash
-sudo apt install libgtk-4-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev pkg-config
+sudo dnf install gtk4-devel gstreamer1-devel \
+  gstreamer1-plugins-base-devel pkgconf-pkg-config
 ```
+
+</details>
+
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
+
+```bash
+sudo apt install libgtk-4-dev libgstreamer1.0-dev \
+  libgstreamer-plugins-base1.0-dev pkg-config
+```
+
+</details>
 
 ```bash
 cargo build --release
@@ -65,30 +110,35 @@ cargo build --release
 ## Usage
 
 ```bash
-rumpel movie.mp4
-rumpel first.mp4 second.mkv
-rumpel
-rumpel --version
+rumpel movie.mp4              # play one file
+rumpel first.mp4 second.mkv   # one window per file
+rumpel                        # start empty, pick a file with the folder button
+rumpel --version              # print the version and exit
 ```
 
-With no argument, use the folder control to select a video. Opening a video
-from an occupied window creates a new player window.
+Opening a video from a window that already has one creates a new window.
 
-`rumpel --version` prints the installed Rumpel version and exits without
-starting the player.
+### Controls
 
-| Shortcut | Action |
+| Input | Action |
 | --- | --- |
-| `Left` | Open the previous video in the current directory |
-| `Right` | Open the next video in the current directory |
-| `Ctrl+X` | Move the active video to Trash and open the next video |
-| `i` | Toggle media information |
+| <kbd>←</kbd> | Previous video in the current directory |
+| <kbd>→</kbd> | Next video in the current directory |
+| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Move the current video to Trash, open the next one |
+| Click on video | Play / pause |
+| Double-click on video | Toggle fullscreen |
+| Info button | Toggle the media-information overlay |
 
-Directory navigation supports common Matroska, MP4, WebM, AVI, MPEG, FLV, and
-WMV extensions. Files are ordered alphabetically without case sensitivity and
-navigation wraps at either end.
+Folder navigation covers common Matroska, MP4, WebM, AVI, MPEG, FLV, and WMV extensions, orders
+files case-insensitively, and wraps at either end.
 
-## Development
+Mute and loop persist across runs in `$XDG_CONFIG_HOME/rumpel.conf`. Rumpel sets
+`GSK_RENDERER=opengl` unless the variable is already set in the environment.
+
+## Contributing
+
+Contributions are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md). Participation is
+governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ```bash
 cargo fmt --all -- --check
@@ -97,68 +147,23 @@ cargo test --locked --all-features
 cargo run -- video.mp4
 ```
 
-The player implementation is in [src/main.rs](src/main.rs). See the
-[changelog](CHANGELOG.md) for released changes.
+The player is a single file: [src/main.rs](src/main.rs). Building the Debian, RPM, and Flatpak
+packages is covered in [docs/PACKAGING.md](docs/PACKAGING.md).
 
-## Packaging
+| | |
+| --- | --- |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| Security policy | [SECURITY.md](SECURITY.md) |
+| Releases | [github.com/phillies/rumpel/releases](https://github.com/phillies/rumpel/releases) |
 
-Build Debian and RPM packages with the corresponding packagers installed:
+## Acknowledgements
 
-```bash
-cargo install cargo-deb cargo-generate-rpm
-cargo build --release
-cargo deb --no-build
-cargo generate-rpm
-```
-
-The packages are written to `target/debian/` and `target/generate-rpm/`.
-Runtime dependencies are declared in [Cargo.toml](Cargo.toml). Fedora users may
-need to install `gstreamer1-libav` separately because it is distributed by RPM
-Fusion.
-
-The Flatpak manifest is [packaging/io.lies.rumpel.yml](packaging/io.lies.rumpel.yml).
-It uses pinned sources in [packaging/cargo-sources.json](packaging/cargo-sources.json);
-regenerate that file whenever `Cargo.lock` changes using the
-[Flatpak cargo generator](https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo).
-
-### Flatpak
-
-Flatpak builds require `flatpak` and `flatpak-builder`. Install the builder from
-the host distribution, for example:
-
-```bash
-sudo dnf install flatpak flatpak-builder
-# or: sudo apt install flatpak flatpak-builder
-```
-
-For an offline build, install the manifest's SDK and Rust extension first:
-
-```bash
-flatpak install flathub org.gnome.Sdk//50 org.freedesktop.Sdk.Extension.rust-stable//50
-flatpak-builder --force-clean --disable-download --state-dir=target/flatpak/state target/flatpak/build packaging/io.lies.rumpel.yml
-```
-
-The Flatpak-distributed Builder application is an alternative to a host
-installation. With `org.flatpak.Builder` installed, run the same build through
-its bundled `flatpak-builder` binary:
-
-```bash
-flatpak run --filesystem="$PWD" org.flatpak.Builder --force-clean --disable-download --state-dir=target/flatpak/state target/flatpak/build packaging/io.lies.rumpel.yml
-```
-
-Neither command installs or deploys the resulting Flatpak.
-
-## Contributing
-
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
-opening an issue or pull request. Participation is governed by the
-[Code of Conduct](CODE_OF_CONDUCT.md).
-
-To report a security vulnerability, follow [SECURITY.md](SECURITY.md) rather
-than filing a public issue.
+Built on [GTK4](https://www.gtk.org/), [GStreamer](https://gstreamer.freedesktop.org/), and
+[gst-plugin-gtk4](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs).
 
 ## License
 
 Copyright (C) 2026 Philipp Lies.
 
-Rumpel is licensed under the [GNU General Public License, version 3 or later](LICENSE).
+Rumpel is licensed under the
+[GNU General Public License, version 3 or later](LICENSE).

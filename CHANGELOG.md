@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-05
+
 ### Fixed
 
 - Use `Left` and `Right` for folder video navigation because GTK controls can consume Ctrl-arrow shortcuts.
+- Check out the repository in the release publish job so the GitHub Release is created.
+- Publish releases idempotently, so re-running the workflow for an existing tag uploads the packages instead of failing.
 
 ## [0.3.0] - 2026-08-01
 

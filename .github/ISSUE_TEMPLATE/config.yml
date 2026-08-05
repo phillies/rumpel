@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/phillies/rumpel/blob/main/SECURITY.md
+    about: Report privately by following the security policy, not in a public issue.
+  - name: Contributing guide
+    url: https://github.com/phillies/rumpel/blob/main/CONTRIBUTING.md
+    about: How to report issues and submit pull requests.

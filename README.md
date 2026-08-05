@@ -79,8 +79,8 @@ starting the player.
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+Left` | Open the previous video in the current directory |
-| `Ctrl+Right` | Open the next video in the current directory |
+| `Left` | Open the previous video in the current directory |
+| `Right` | Open the next video in the current directory |
 | `Ctrl+X` | Move the active video to Trash and open the next video |
 | `i` | Toggle media information |
 

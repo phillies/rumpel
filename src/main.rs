@@ -38,6 +38,23 @@ fn wrapped_neighbor(files: &[PathBuf], current: &Path, offset: isize) -> Option<
     files.get(index).cloned()
 }
 
+fn folder_navigation_offset(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<isize> {
+    let shortcut_modifiers = gdk::ModifierType::SHIFT_MASK
+        | gdk::ModifierType::CONTROL_MASK
+        | gdk::ModifierType::ALT_MASK
+        | gdk::ModifierType::SUPER_MASK
+        | gdk::ModifierType::HYPER_MASK
+        | gdk::ModifierType::META_MASK;
+    if modifiers.intersects(shortcut_modifiers) {
+        return None;
+    }
+    match key {
+        gdk::Key::Left => Some(-1),
+        gdk::Key::Right => Some(1),
+        _ => None,
+    }
+}
+
 fn stream_details(collection: &gst::StreamCollection) -> String {
     let mut details = Vec::new();
     for index in 0..collection.size() {
@@ -520,10 +537,9 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         key.set_propagation_phase(gtk::PropagationPhase::Capture);
         let key_window = window.clone();
         key.connect_key_pressed(move |_, key, _, modifiers| {
-            if !modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
-                return glib::Propagation::Proceed;
-            }
-            if key == gdk::Key::x || key == gdk::Key::X {
+            if modifiers.contains(gdk::ModifierType::CONTROL_MASK)
+                && (key == gdk::Key::x || key == gdk::Key::X)
+            {
                 let Some(current) = current_file.borrow().clone() else {
                     return glib::Propagation::Stop;
                 };
@@ -567,10 +583,8 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                 );
                 return glib::Propagation::Stop;
             }
-            let offset = match key {
-                gdk::Key::Left => -1,
-                gdk::Key::Right => 1,
-                _ => return glib::Propagation::Proceed,
+            let Some(offset) = folder_navigation_offset(key, modifiers) else {
+                return glib::Propagation::Proceed;
             };
             if let Some(current) = current_file.borrow().as_deref() {
                 if let Ok(files) = folder_videos(current) {
@@ -709,7 +723,10 @@ fn main() -> glib::ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::{fmt_time, is_video_extension, version_requested, wrapped_neighbor};
+    use super::{
+        fmt_time, folder_navigation_offset, is_video_extension, version_requested, wrapped_neighbor,
+    };
+    use gtk::gdk;
     use std::path::PathBuf;
 
     #[test]
@@ -752,6 +769,22 @@ mod tests {
         assert_eq!(
             wrapped_neighbor(&files, &files[2], 1),
             Some(files[0].clone())
+        );
+    }
+
+    #[test]
+    fn plain_arrows_navigate_between_folder_videos() {
+        assert_eq!(
+            folder_navigation_offset(gdk::Key::Left, gdk::ModifierType::empty()),
+            Some(-1)
+        );
+        assert_eq!(
+            folder_navigation_offset(gdk::Key::Right, gdk::ModifierType::empty()),
+            Some(1)
+        );
+        assert_eq!(
+            folder_navigation_offset(gdk::Key::Left, gdk::ModifierType::CONTROL_MASK),
+            None
         );
     }
 

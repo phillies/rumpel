@@ -7,7 +7,7 @@ information overlay in the upper-right corner of the video. The overlay shows
 the available video codec, resolution, frame rate, and every audio stream's
 codec and channel count.
 
-`Ctrl+Left` and `Ctrl+Right` open the preceding or following video in the
+`Left` and `Right` open the preceding or following video in the
 current file's directory. The directory is filtered to common video extensions,
 sorted alphabetically by filename without case sensitivity, and wraps at either
 end.

@@ -21,6 +21,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -62,6 +64,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Install build dependencies
         run: |
@@ -96,19 +100,27 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
 
-      - name: Create GitHub Release
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          gh release create "$TAG" \
+          # Create the release only when it does not exist yet, so re-running
+          # this job against an existing tag republishes instead of failing.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --generate-notes
+          fi
+
+          gh release upload "$TAG" \
             release-artifacts/rumpel-deb/*.deb \
             release-artifacts/rumpel-rpm/*.rpm \
             release-artifacts/rumpel-linux-x86_64/rumpel \
-            --generate-notes
+            --clobber

@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-09
+
 ### Added
 
+- Releases are created automatically when a version bump in `Cargo.toml` merges to `main`.
 - Windows support: build with the MSYS2 MINGW64 toolchain and ship a self-contained `rumpel-windows-x86_64.zip` with each release.
 - Keyboard shortcuts: `Ctrl+O` opens a video, `Ctrl+S` and `Ctrl+D` go to the previous and next video, and `S` and `D` jump back and forward by 20% of the video's length.
 

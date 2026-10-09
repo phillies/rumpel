@@ -1,0 +1,57 @@
+name: Tag release on version bump
+
+# A merge to main that changes the version in Cargo.toml to one without a tag
+# creates that tag and runs the release workflow. Other merges do nothing.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Create tag for new version
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      create: ${{ steps.version.outputs.create }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version and check for an existing tag
+        id: version
+        run: |
+          tag="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "create=false" >> "$GITHUB_OUTPUT"
+            echo "$tag already exists, no release."
+          else
+            echo "create=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.version.outputs.create == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Rumpel $TAG"
+          git push origin "$TAG"
+
+  release:
+    name: Release
+    needs: tag
+    if: needs.tag.outputs.create == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

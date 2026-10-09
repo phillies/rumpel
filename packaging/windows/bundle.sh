@@ -12,7 +12,9 @@ PREFIX="${MINGW_PREFIX:-/mingw64}"
 OUT="${1:-$ROOT/target/windows-bundle}"
 DIST="$OUT/rumpel"
 
-rm -rf "$OUT"
+# Clear only what this script writes, never the caller's output directory as a whole
+rm -rf "$DIST"
+rm -f "$OUT/rumpel-windows-x86_64.zip"
 mkdir -p "$DIST"
 
 cp "$ROOT/target/release/rumpel.exe" "$ROOT/LICENSE" "$DIST/"

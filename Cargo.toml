@@ -1,6 +1,6 @@
 [package]
 name = "rumpel"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.92"
 description = "Minimal GTK4/GStreamer video player"
@@ -66,4 +66,14 @@ assets = [
 [dependencies]
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 gst = { package = "gstreamer", version = "0.25" }
+
+# GL backends are per platform: the Wayland/X11 crates do not build on Windows.
+# Windows uploads frames through GTK instead of GStreamer GL (see src/main.rs);
+# gtk_v4_20 lets the sink hand NV12 straight to GTK instead of converting every
+# frame to RGB in GStreamer first, which drops frames at 4K.
+# MSYS2 ships GTK 4.20+, while Linux distributions may still ship older GTK.
+[target.'cfg(unix)'.dependencies]
 gst-plugin-gtk4 = { version = "0.15", features = ["waylandegl", "x11egl"] }
+
+[target.'cfg(windows)'.dependencies]
+gst-plugin-gtk4 = { version = "0.15", features = ["gtk_v4_20"] }

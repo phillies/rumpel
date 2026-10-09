@@ -1,3 +1,6 @@
+// release builds are GUI apps on Windows: no console window behind the player
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use gst::prelude::*;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -38,9 +41,31 @@ fn wrapped_neighbor(files: &[PathBuf], current: &Path, offset: isize) -> Option<
     files.get(index).cloned()
 }
 
-fn folder_navigation_offset(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<isize> {
+#[derive(Debug, PartialEq)]
+enum Shortcut {
+    Open,
+    Trash,
+    /// previous (-1) or next (1) video in the current directory
+    Navigate(isize),
+    /// jump by this fraction of the duration
+    Seek(f64),
+}
+
+const SEEK_FRACTION: f64 = 0.2;
+
+fn shortcut(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<Shortcut> {
+    // lowercase so Caps Lock does not change the letter shortcuts
+    let key = key.to_lower();
+    if modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
+        return match key {
+            gdk::Key::o => Some(Shortcut::Open),
+            gdk::Key::x => Some(Shortcut::Trash),
+            gdk::Key::s => Some(Shortcut::Navigate(-1)),
+            gdk::Key::d => Some(Shortcut::Navigate(1)),
+            _ => None,
+        };
+    }
     let shortcut_modifiers = gdk::ModifierType::SHIFT_MASK
-        | gdk::ModifierType::CONTROL_MASK
         | gdk::ModifierType::ALT_MASK
         | gdk::ModifierType::SUPER_MASK
         | gdk::ModifierType::HYPER_MASK
@@ -49,10 +74,21 @@ fn folder_navigation_offset(key: gdk::Key, modifiers: gdk::ModifierType) -> Opti
         return None;
     }
     match key {
-        gdk::Key::Left => Some(-1),
-        gdk::Key::Right => Some(1),
+        gdk::Key::Left => Some(Shortcut::Navigate(-1)),
+        gdk::Key::Right => Some(Shortcut::Navigate(1)),
+        gdk::Key::s => Some(Shortcut::Seek(-SEEK_FRACTION)),
+        gdk::Key::d => Some(Shortcut::Seek(SEEK_FRACTION)),
         _ => None,
     }
+}
+
+fn seek_target(
+    position: gst::ClockTime,
+    duration: gst::ClockTime,
+    fraction: f64,
+) -> gst::ClockTime {
+    let target = position.nseconds() as f64 + duration.nseconds() as f64 * fraction;
+    gst::ClockTime::from_nseconds(target.clamp(0.0, duration.nseconds() as f64) as u64)
 }
 
 fn stream_details(collection: &gst::StreamCollection) -> String {
@@ -110,21 +146,31 @@ fn config_path() -> std::path::PathBuf {
     glib::user_config_dir().join("rumpel.conf")
 }
 
-fn load_config() -> (bool, bool) {
+fn load_config_from(path: &Path) -> (bool, bool) {
     let kf = glib::KeyFile::new();
-    let _ = kf.load_from_file(config_path(), glib::KeyFileFlags::NONE);
+    let _ = kf.load_from_file(path, glib::KeyFileFlags::NONE);
     (
         kf.boolean("state", "mute").unwrap_or(false),
         kf.boolean("state", "loop").unwrap_or(true),
     )
 }
 
-fn save_config(mute: bool, looping: bool) {
-    let _ = std::fs::create_dir_all(glib::user_config_dir());
+fn save_config_to(path: &Path, mute: bool, looping: bool) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
     let kf = glib::KeyFile::new();
     kf.set_boolean("state", "mute", mute);
     kf.set_boolean("state", "loop", looping);
-    let _ = kf.save_to_file(config_path());
+    let _ = kf.save_to_file(path);
+}
+
+fn load_config() -> (bool, bool) {
+    load_config_from(&config_path())
+}
+
+fn save_config(mute: bool, looping: bool) {
+    save_config_to(&config_path(), mute, looping);
 }
 
 fn load_file(
@@ -161,10 +207,13 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         .unwrap();
     let paintable = sink.property::<gdk::Paintable>("paintable");
 
-    // GL path when available, per gtk4paintablesink docs; falls back to software
-    let video_sink = if paintable
-        .property::<Option<gdk::GLContext>>("gl-context")
-        .is_some()
+    // GL path when available, per gtk4paintablesink docs; falls back to software.
+    // Windows always takes the software path: GStreamer's GL context cannot share
+    // GTK's WGL context (wglShareLists fails with ERROR_BUSY) and frames stay black.
+    let video_sink = if cfg!(not(windows))
+        && paintable
+            .property::<Option<gdk::GLContext>>("gl-context")
+            .is_some()
     {
         gst::ElementFactory::make("glsinkbin")
             .property("sink", &sink)
@@ -487,14 +536,23 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         .bus()
         .unwrap()
         .add_watch_local({
-            let (playbin, play_btn, loop_btn, info_label) = (
+            let (playbin, play_btn, loop_btn, mute_btn, vol, info_label) = (
                 playbin.clone(),
                 play_btn.clone(),
                 loop_btn.clone(),
+                mute_btn.clone(),
+                vol.clone(),
                 info_label.clone(),
             );
             move |_, msg| {
                 match msg.view() {
+                    // playbin hands volume and mute to the audio sink when it has
+                    // its own; on Windows each video gets a new WASAPI ring buffer
+                    // that drops a mute set before it opened, so reapply both
+                    gst::MessageView::StreamStart(_) => {
+                        playbin.set_property("volume", vol.value());
+                        playbin.set_property("mute", mute_btn.is_active());
+                    }
                     gst::MessageView::StreamCollection(streams) => {
                         let details = stream_details(&streams.stream_collection());
                         info_label.set_text(if details.is_empty() {
@@ -525,81 +583,109 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         .unwrap();
 
     {
-        let (playbin, window, play_btn, size_done, current_file, info_label) = (
+        let (playbin, window, play_btn, size_done, current_file, info_label, open_btn) = (
             playbin.clone(),
             window.clone(),
             play_btn.clone(),
             size_done.clone(),
             current_file.clone(),
             info_label.clone(),
+            open_btn.clone(),
         );
         let key = gtk::EventControllerKey::new();
         key.set_propagation_phase(gtk::PropagationPhase::Capture);
         let key_window = window.clone();
         key.connect_key_pressed(move |_, key, _, modifiers| {
-            if modifiers.contains(gdk::ModifierType::CONTROL_MASK)
-                && (key == gdk::Key::x || key == gdk::Key::X)
-            {
-                let Some(current) = current_file.borrow().clone() else {
-                    return glib::Propagation::Stop;
-                };
-                let successor = folder_videos(&current)
-                    .ok()
-                    .and_then(|files| wrapped_neighbor(&files, &current, 1))
-                    .filter(|next| next != &current);
-                let file = gio::File::for_path(&current);
-                let (playbin, play_btn, size_done, current_file, info_label, window) = (
-                    playbin.clone(),
-                    play_btn.clone(),
-                    size_done.clone(),
-                    current_file.clone(),
-                    info_label.clone(),
-                    key_window.clone(),
-                );
-                file.trash_async(
-                    glib::Priority::DEFAULT,
-                    gio::Cancellable::NONE,
-                    move |result| {
-                        if let Err(error) = result {
-                            eprintln!("Could not move {} to Trash: {error}", current.display());
-                        } else if let Some(successor) = successor {
-                            load_file(
-                                &playbin,
-                                &window,
-                                &play_btn,
-                                &size_done,
-                                &current_file,
-                                &info_label,
-                                &gio::File::for_path(successor),
-                            );
-                        } else {
-                            let _ = playbin.set_state(gst::State::Null);
-                            play_btn.set_active(false);
-                            current_file.replace(None);
-                            info_label.set_text("No video is loaded.");
-                            window.set_title(Some("Rumpel"));
-                        }
-                    },
-                );
-                return glib::Propagation::Stop;
-            }
-            let Some(offset) = folder_navigation_offset(key, modifiers) else {
+            let Some(shortcut) = shortcut(key, modifiers) else {
                 return glib::Propagation::Proceed;
             };
-            if let Some(current) = current_file.borrow().as_deref() {
-                if let Ok(files) = folder_videos(current) {
-                    if let Some(next) = wrapped_neighbor(&files, current, offset) {
-                        let next = gio::File::for_path(next);
-                        load_file(
-                            &playbin,
-                            &key_window,
-                            &play_btn,
-                            &size_done,
-                            &current_file,
-                            &info_label,
-                            &next,
+            match shortcut {
+                Shortcut::Open => open_btn.emit_clicked(),
+                Shortcut::Seek(fraction) => {
+                    if let (Some(position), Some(duration)) = (
+                        playbin.query_position::<gst::ClockTime>(),
+                        playbin.query_duration::<gst::ClockTime>(),
+                    ) {
+                        let _ = playbin.seek_simple(
+                            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                            seek_target(position, duration, fraction),
                         );
                     }
+                }
+                Shortcut::Navigate(offset) => {
+                    // clone first: load_file replaces current_file, which must not
+                    // still be borrowed (an if-let borrow lives through its body)
+                    let current = current_file.borrow().clone();
+                    if let Some(current) = current {
+                        if let Ok(files) = folder_videos(&current) {
+                            if let Some(next) = wrapped_neighbor(&files, &current, offset) {
+                                load_file(
+                                    &playbin,
+                                    &key_window,
+                                    &play_btn,
+                                    &size_done,
+                                    &current_file,
+                                    &info_label,
+                                    &gio::File::for_path(next),
+                                );
+                            }
+                        }
+                    }
+                }
+                Shortcut::Trash => {
+                    let Some(current) = current_file.borrow().clone() else {
+                        return glib::Propagation::Stop;
+                    };
+                    let successor = folder_videos(&current)
+                        .ok()
+                        .and_then(|files| wrapped_neighbor(&files, &current, 1))
+                        .filter(|next| next != &current);
+                    let file = gio::File::for_path(&current);
+                    // release the file before trashing it: Windows refuses to move a
+                    // file that is still open. Untoggle first, since the toggle
+                    // handler pauses the pipeline, which would reopen the file.
+                    play_btn.set_active(false);
+                    let _ = playbin.set_state(gst::State::Null);
+                    let (playbin, play_btn, size_done, current_file, info_label, window) = (
+                        playbin.clone(),
+                        play_btn.clone(),
+                        size_done.clone(),
+                        current_file.clone(),
+                        info_label.clone(),
+                        key_window.clone(),
+                    );
+                    file.trash_async(
+                        glib::Priority::DEFAULT,
+                        gio::Cancellable::NONE,
+                        move |result| {
+                            let next = match result {
+                                Err(error) => {
+                                    eprintln!(
+                                        "Could not move {} to Trash: {error}",
+                                        current.display()
+                                    );
+                                    // still there, so keep playing it
+                                    Some(current)
+                                }
+                                Ok(()) => successor,
+                            };
+                            if let Some(next) = next {
+                                load_file(
+                                    &playbin,
+                                    &window,
+                                    &play_btn,
+                                    &size_done,
+                                    &current_file,
+                                    &info_label,
+                                    &gio::File::for_path(next),
+                                );
+                            } else {
+                                current_file.replace(None);
+                                info_label.set_text("No video is loaded.");
+                                window.set_title(Some("Rumpel"));
+                            }
+                        },
+                    );
                 }
             }
             glib::Propagation::Stop
@@ -635,8 +721,10 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
             );
             dialog.open(Some(&window), gio::Cancellable::NONE, move |res| {
                 if let Ok(file) = res {
-                    // empty window: load here; otherwise a new window per video
-                    if playbin.property::<Option<String>>("uri").is_none() {
+                    // empty window (never loaded, or its last video was trashed):
+                    // load here; otherwise a new window per video
+                    let empty = current_file.borrow().is_none();
+                    if empty {
                         load_file(
                             &playbin,
                             &win,
@@ -686,10 +774,52 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     }
 }
 
+// portable Windows bundles keep GStreamer and gdk-pixbuf files next to rumpel.exe;
+// point the libraries there so file associations work without a wrapper script
+#[cfg(windows)]
+fn use_bundled_runtime() {
+    let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+    else {
+        return;
+    };
+    if !dir.join("lib").join("gstreamer-1.0").is_dir() {
+        return;
+    }
+    std::env::set_var(
+        "GST_PLUGIN_SYSTEM_PATH_1_0",
+        dir.join("lib").join("gstreamer-1.0"),
+    );
+    std::env::set_var(
+        "GST_PLUGIN_SCANNER",
+        dir.join("libexec").join("gst-plugin-scanner.exe"),
+    );
+    std::env::set_var(
+        "GDK_PIXBUF_MODULE_FILE",
+        dir.join("lib")
+            .join("gdk-pixbuf-2.0")
+            .join("2.10.0")
+            .join("loaders.cache"),
+    );
+    std::env::set_var("XDG_DATA_DIRS", dir.join("share"));
+}
+
 fn main() -> glib::ExitCode {
     if version_requested(std::env::args().skip(1)) {
         println!("rumpel {}", env!("CARGO_PKG_VERSION"));
         return glib::ExitCode::SUCCESS;
+    }
+
+    #[cfg(windows)]
+    use_bundled_runtime();
+
+    // GTK's GPU renderers need Direct Composition on Windows, which GTK only
+    // enables on request; without it GTK paints with cairo on the CPU and
+    // drops frames (720p HEVC managed 18 fps instead of 30)
+    #[cfg(windows)]
+    if std::env::var_os("GDK_DEBUG").is_none() {
+        std::env::set_var("GDK_DEBUG", "dcomp");
     }
 
     if std::env::var_os("GSK_RENDERER").is_none() {
@@ -724,7 +854,8 @@ fn main() -> glib::ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        fmt_time, folder_navigation_offset, is_video_extension, version_requested, wrapped_neighbor,
+        fmt_time, is_video_extension, seek_target, shortcut, version_requested, wrapped_neighbor,
+        Shortcut,
     };
     use gtk::gdk;
     use std::path::PathBuf;
@@ -737,15 +868,16 @@ mod tests {
 
     #[test]
     fn config_roundtrip() {
-        // must run before anything else touches glib's cached config dir
-        std::env::set_var(
-            "XDG_CONFIG_HOME",
-            std::env::temp_dir().join("rumpel-test-config"),
-        );
-        super::save_config(true, false);
-        assert_eq!(super::load_config(), (true, false));
-        super::save_config(false, true);
-        assert_eq!(super::load_config(), (false, true));
+        // explicit path: GLib ignores XDG_CONFIG_HOME on Windows, so the real
+        // config location must never be touched by tests
+        let path = std::env::temp_dir()
+            .join(format!("rumpel-test-{}", std::process::id()))
+            .join("rumpel.conf");
+        super::save_config_to(&path, true, false);
+        assert_eq!(super::load_config_from(&path), (true, false));
+        super::save_config_to(&path, false, true);
+        assert_eq!(super::load_config_from(&path), (false, true));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
     #[test]
@@ -775,17 +907,47 @@ mod tests {
     #[test]
     fn plain_arrows_navigate_between_folder_videos() {
         assert_eq!(
-            folder_navigation_offset(gdk::Key::Left, gdk::ModifierType::empty()),
-            Some(-1)
+            shortcut(gdk::Key::Left, gdk::ModifierType::empty()),
+            Some(Shortcut::Navigate(-1))
         );
         assert_eq!(
-            folder_navigation_offset(gdk::Key::Right, gdk::ModifierType::empty()),
-            Some(1)
+            shortcut(gdk::Key::Right, gdk::ModifierType::empty()),
+            Some(Shortcut::Navigate(1))
         );
         assert_eq!(
-            folder_navigation_offset(gdk::Key::Left, gdk::ModifierType::CONTROL_MASK),
+            shortcut(gdk::Key::Left, gdk::ModifierType::CONTROL_MASK),
             None
         );
+    }
+
+    #[test]
+    fn control_shortcuts_open_trash_and_navigate() {
+        let ctrl = gdk::ModifierType::CONTROL_MASK;
+        assert_eq!(shortcut(gdk::Key::o, ctrl), Some(Shortcut::Open));
+        assert_eq!(shortcut(gdk::Key::x, ctrl), Some(Shortcut::Trash));
+        assert_eq!(shortcut(gdk::Key::X, ctrl), Some(Shortcut::Trash));
+        assert_eq!(shortcut(gdk::Key::s, ctrl), Some(Shortcut::Navigate(-1)));
+        assert_eq!(shortcut(gdk::Key::d, ctrl), Some(Shortcut::Navigate(1)));
+        assert_eq!(shortcut(gdk::Key::o, gdk::ModifierType::empty()), None);
+    }
+
+    #[test]
+    fn plain_s_and_d_seek_by_a_fifth() {
+        let none = gdk::ModifierType::empty();
+        assert_eq!(shortcut(gdk::Key::s, none), Some(Shortcut::Seek(-0.2)));
+        assert_eq!(shortcut(gdk::Key::d, none), Some(Shortcut::Seek(0.2)));
+        // Caps Lock reports the uppercase key without Shift
+        assert_eq!(shortcut(gdk::Key::D, none), Some(Shortcut::Seek(0.2)));
+        assert_eq!(shortcut(gdk::Key::D, gdk::ModifierType::SHIFT_MASK), None);
+    }
+
+    #[test]
+    fn seek_target_clamps_to_the_video() {
+        let s = gst::ClockTime::from_seconds;
+        assert_eq!(seek_target(s(10), s(100), 0.2), s(30));
+        assert_eq!(seek_target(s(50), s(100), -0.2), s(30));
+        assert_eq!(seek_target(s(10), s(100), -0.2), s(0));
+        assert_eq!(seek_target(s(90), s(100), 0.2), s(100));
     }
 
     #[test]

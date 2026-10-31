@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `S`/`D` jump distance is configurable in `rumpel.conf` (`[seek] backward`/`forward`, as `N%` or `Ns`).
+- Hardware video decoders (VA, NVDEC, D3D11/12, V4L2, QSV/MSDK, AMF) are preferred by default; set `[decoding] hardware=false` to disable.
+- Folder navigation also recognises `.qt`, `.f4v`, `.rm` and `.rmvb`.
+
+### Changed
+
+- Saving mute/loop preserves other settings in `rumpel.conf`.
+
 ## [0.4.0] - 2026-10-09
 
 ### Added

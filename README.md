@@ -91,7 +91,7 @@ sudo apt install libgtk-4-1 gstreamer1.0-plugins-good \
 </details>
 
 `*-libav` provides common H.264/H.265 software decoders; on Fedora it comes from
-[RPM Fusion](https://rpmfusion.org/). `*-vaapi` enables hardware decoding on supported GPUs.
+[RPM Fusion](https://rpmfusion.org/). `*-vaapi` (and the newer `va` plugin in `*-plugins-bad`) enables hardware decoding on supported GPUs.
 Codec availability varies by distribution and region.
 
 ### Build from source on Linux
@@ -200,8 +200,22 @@ Opening a video from a window that already has one creates a new window.
 Folder navigation covers common Matroska, MP4, WebM, AVI, MPEG, FLV, and WMV extensions, orders
 files case-insensitively, and wraps at either end.
 
-Mute and loop persist across runs in `$XDG_CONFIG_HOME/rumpel.conf` on Linux, and in
-`%LOCALAPPDATA%\rumpel.conf` on Windows. Rumpel sets `GSK_RENDERER=opengl` unless the variable is
+Settings live in `$XDG_CONFIG_HOME/rumpel.conf` on Linux and `%LOCALAPPDATA%\rumpel.conf` on
+Windows. Mute and loop are saved automatically; the rest is edited by hand (the options are
+written to the file on first save):
+
+```ini
+[seek]
+# S and D: percent of the duration ("20%") or seconds ("10s")
+backward=20%
+forward=20%
+
+[decoding]
+# prefer VA/NVDEC/D3D11/V4L2 decoders; false forces software decoding
+hardware=true
+```
+
+Rumpel sets `GSK_RENDERER=opengl` unless the variable is
 already set in the environment.
 
 ## Contributing

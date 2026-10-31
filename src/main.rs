@@ -10,7 +10,8 @@ use std::rc::Rc;
 
 const VIDEO_EXTENSIONS: &[&str] = &[
     "3gp", "3g2", "asf", "avi", "divx", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpe", "mpeg",
-    "mpg", "mpv", "mts", "mxf", "ogm", "ogv", "ts", "vob", "webm", "wmv",
+    "mpg", "mpv", "mts", "mxf", "ogm", "ogv", "qt", "ts", "vob", "webm", "wmv", "f4v", "rm",
+    "rmvb",
 ];
 
 fn is_video_extension(extension: &str) -> bool {
@@ -47,11 +48,46 @@ enum Shortcut {
     Trash,
     /// previous (-1) or next (1) video in the current directory
     Navigate(isize),
-    /// jump by this fraction of the duration
-    Seek(f64),
+    /// jump backward (-1) or forward (1) by the configured step
+    Seek(isize),
 }
 
-const SEEK_FRACTION: f64 = 0.2;
+/// How far the s/d keys jump.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SeekStep {
+    /// fraction of the total duration
+    Fraction(f64),
+    Seconds(f64),
+}
+
+impl SeekStep {
+    const DEFAULT: SeekStep = SeekStep::Fraction(0.2);
+
+    /// "20%" or "10s" (a bare number means seconds); None if invalid or not positive
+    fn parse(text: &str) -> Option<SeekStep> {
+        let text = text.trim();
+        let (number, percent) = match text.strip_suffix('%') {
+            Some(number) => (number, true),
+            None => (text.strip_suffix('s').unwrap_or(text), false),
+        };
+        let value: f64 = number.trim().parse().ok()?;
+        if !value.is_finite() || value <= 0.0 {
+            return None;
+        }
+        Some(if percent {
+            SeekStep::Fraction(value / 100.0)
+        } else {
+            SeekStep::Seconds(value)
+        })
+    }
+
+    fn format(self) -> String {
+        match self {
+            SeekStep::Fraction(f) => format!("{}%", f * 100.0),
+            SeekStep::Seconds(s) => format!("{s}s"),
+        }
+    }
+}
 
 fn shortcut(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<Shortcut> {
     // lowercase so Caps Lock does not change the letter shortcuts
@@ -76,8 +112,8 @@ fn shortcut(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<Shortcut> {
     match key {
         gdk::Key::Left => Some(Shortcut::Navigate(-1)),
         gdk::Key::Right => Some(Shortcut::Navigate(1)),
-        gdk::Key::s => Some(Shortcut::Seek(-SEEK_FRACTION)),
-        gdk::Key::d => Some(Shortcut::Seek(SEEK_FRACTION)),
+        gdk::Key::s => Some(Shortcut::Seek(-1)),
+        gdk::Key::d => Some(Shortcut::Seek(1)),
         _ => None,
     }
 }
@@ -85,9 +121,14 @@ fn shortcut(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<Shortcut> {
 fn seek_target(
     position: gst::ClockTime,
     duration: gst::ClockTime,
-    fraction: f64,
+    step: SeekStep,
+    direction: isize,
 ) -> gst::ClockTime {
-    let target = position.nseconds() as f64 + duration.nseconds() as f64 * fraction;
+    let delta = match step {
+        SeekStep::Fraction(f) => duration.nseconds() as f64 * f,
+        SeekStep::Seconds(s) => s * 1e9,
+    };
+    let target = position.nseconds() as f64 + delta * direction.signum() as f64;
     gst::ClockTime::from_nseconds(target.clamp(0.0, duration.nseconds() as f64) as u64)
 }
 
@@ -146,31 +187,115 @@ fn config_path() -> std::path::PathBuf {
     glib::user_config_dir().join("rumpel.conf")
 }
 
-fn load_config_from(path: &Path) -> (bool, bool) {
-    let kf = glib::KeyFile::new();
-    let _ = kf.load_from_file(path, glib::KeyFileFlags::NONE);
-    (
-        kf.boolean("state", "mute").unwrap_or(false),
-        kf.boolean("state", "loop").unwrap_or(true),
-    )
+#[derive(Debug, Clone, PartialEq)]
+struct Config {
+    mute: bool,
+    looping: bool,
+    seek_backward: SeekStep,
+    seek_forward: SeekStep,
+    hardware_decoding: bool,
 }
 
-fn save_config_to(path: &Path, mute: bool, looping: bool) {
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            mute: false,
+            looping: true,
+            seek_backward: SeekStep::DEFAULT,
+            seek_forward: SeekStep::DEFAULT,
+            hardware_decoding: true,
+        }
+    }
+}
+
+fn load_config_from(path: &Path) -> Config {
+    let kf = glib::KeyFile::new();
+    let _ = kf.load_from_file(path, glib::KeyFileFlags::NONE);
+    let defaults = Config::default();
+    let step = |key: &str, default: SeekStep| {
+        kf.string("seek", key)
+            .ok()
+            .and_then(|text| SeekStep::parse(&text))
+            .unwrap_or(default)
+    };
+    Config {
+        mute: kf.boolean("state", "mute").unwrap_or(defaults.mute),
+        looping: kf.boolean("state", "loop").unwrap_or(defaults.looping),
+        seek_backward: step("backward", defaults.seek_backward),
+        seek_forward: step("forward", defaults.seek_forward),
+        hardware_decoding: kf
+            .boolean("decoding", "hardware")
+            .unwrap_or(defaults.hardware_decoding),
+    }
+}
+
+/// Writes mute/loop and keeps every other key (and comments) of an existing file.
+fn save_state_to(path: &Path, mute: bool, looping: bool) {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
     let kf = glib::KeyFile::new();
+    let _ = kf.load_from_file(
+        path,
+        glib::KeyFileFlags::KEEP_COMMENTS | glib::KeyFileFlags::KEEP_TRANSLATIONS,
+    );
     kf.set_boolean("state", "mute", mute);
     kf.set_boolean("state", "loop", looping);
+    // write the user-editable options once so they are discoverable
+    if !kf.has_group("seek") {
+        let config = load_config_from(path);
+        kf.set_string("seek", "backward", &config.seek_backward.format());
+        kf.set_string("seek", "forward", &config.seek_forward.format());
+    }
+    if !kf.has_key("decoding", "hardware").unwrap_or(false) {
+        kf.set_boolean("decoding", "hardware", true);
+    }
     let _ = kf.save_to_file(path);
 }
 
-fn load_config() -> (bool, bool) {
+fn load_config() -> Config {
     load_config_from(&config_path())
 }
 
-fn save_config(mute: bool, looping: bool) {
-    save_config_to(&config_path(), mute, looping);
+fn save_state(mute: bool, looping: bool) {
+    save_state_to(&config_path(), mute, looping);
+}
+
+/// Prefer hardware video decoders (VA, NVIDIA, D3D11/12, V4L2, Intel, AMD) over
+/// software ones, or demote them when hardware decoding is turned off.
+fn configure_hardware_decoding(enabled: bool) {
+    const HARDWARE_PLUGINS: &[&str] = &[
+        "va",
+        "vaapi",
+        "nvcodec",
+        "d3d11",
+        "d3d12",
+        "v4l2codecs",
+        "msdk",
+        "qsv",
+        "amfcodec",
+    ];
+    let registry = gst::Registry::get();
+    for feature in registry.features(gst::ElementFactory::static_type()) {
+        let Ok(factory) = feature.downcast::<gst::ElementFactory>() else {
+            continue;
+        };
+        if !factory
+            .has_type(gst::ElementFactoryType::DECODER | gst::ElementFactoryType::MEDIA_VIDEO)
+        {
+            continue;
+        }
+        let is_hardware = factory
+            .plugin_name()
+            .is_some_and(|name| HARDWARE_PLUGINS.contains(&name.as_str()));
+        if is_hardware {
+            factory.set_rank(if enabled {
+                gst::Rank::PRIMARY + 1
+            } else {
+                gst::Rank::NONE
+            });
+        }
+    }
 }
 
 fn load_file(
@@ -247,7 +372,8 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         .build();
     let stop_btn = gtk::Button::from_icon_name("media-playback-stop-symbolic");
     stop_btn.set_tooltip_text(Some("Stop"));
-    let (mute0, loop0) = load_config();
+    let config = load_config();
+    let (mute0, loop0) = (config.mute, config.looping);
     let loop_btn = gtk::ToggleButton::builder()
         .icon_name("media-playlist-repeat-symbolic")
         .tooltip_text("Loop")
@@ -451,11 +577,11 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     // persist mute/loop on every change
     {
         let l = loop_btn.clone();
-        mute_btn.connect_toggled(move |b| save_config(b.is_active(), l.is_active()));
+        mute_btn.connect_toggled(move |b| save_state(b.is_active(), l.is_active()));
     }
     {
         let m = mute_btn.clone();
-        loop_btn.connect_toggled(move |b| save_config(m.is_active(), b.is_active()));
+        loop_btn.connect_toggled(move |b| save_state(m.is_active(), b.is_active()));
     }
 
     {
@@ -592,6 +718,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
             info_label.clone(),
             open_btn.clone(),
         );
+        let config = config.clone();
         let key = gtk::EventControllerKey::new();
         key.set_propagation_phase(gtk::PropagationPhase::Capture);
         let key_window = window.clone();
@@ -601,14 +728,23 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
             };
             match shortcut {
                 Shortcut::Open => open_btn.emit_clicked(),
-                Shortcut::Seek(fraction) => {
+                Shortcut::Seek(direction) => {
                     if let (Some(position), Some(duration)) = (
                         playbin.query_position::<gst::ClockTime>(),
                         playbin.query_duration::<gst::ClockTime>(),
                     ) {
                         let _ = playbin.seek_simple(
                             gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                            seek_target(position, duration, fraction),
+                            seek_target(
+                                position,
+                                duration,
+                                if direction < 0 {
+                                    config.seek_backward
+                                } else {
+                                    config.seek_forward
+                                },
+                                direction,
+                            ),
                         );
                     }
                 }
@@ -826,6 +962,7 @@ fn main() -> glib::ExitCode {
         std::env::set_var("GSK_RENDERER", "opengl");
     }
     gst::init().expect("failed to init GStreamer");
+    configure_hardware_decoding(load_config().hardware_decoding);
     gstgtk4::plugin_register_static().expect("failed to register gtk4paintablesink");
 
     let app = gtk::Application::builder()
@@ -855,7 +992,7 @@ fn main() -> glib::ExitCode {
 mod tests {
     use super::{
         fmt_time, is_video_extension, seek_target, shortcut, version_requested, wrapped_neighbor,
-        Shortcut,
+        SeekStep, Shortcut,
     };
     use gtk::gdk;
     use std::path::PathBuf;
@@ -873,11 +1010,43 @@ mod tests {
         let path = std::env::temp_dir()
             .join(format!("rumpel-test-{}", std::process::id()))
             .join("rumpel.conf");
-        super::save_config_to(&path, true, false);
-        assert_eq!(super::load_config_from(&path), (true, false));
-        super::save_config_to(&path, false, true);
-        assert_eq!(super::load_config_from(&path), (false, true));
+        super::save_state_to(&path, true, false);
+        let config = super::load_config_from(&path);
+        assert!(config.mute && !config.looping);
+        super::save_state_to(&path, false, true);
+        let config = super::load_config_from(&path);
+        assert!(!config.mute && config.looping);
+        assert_eq!(config.seek_forward, SeekStep::DEFAULT);
+        assert!(config.hardware_decoding);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn seek_config_is_read_and_preserved() {
+        let dir = std::env::temp_dir().join(format!("rumpel-seek-{}", std::process::id()));
+        let path = dir.join("rumpel.conf");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            &path,
+            "[seek]\nbackward=5s\nforward=10%\n[decoding]\nhardware=false\n",
+        )
+        .unwrap();
+        super::save_state_to(&path, true, true);
+        let config = super::load_config_from(&path);
+        assert_eq!(config.seek_backward, SeekStep::Seconds(5.0));
+        assert_eq!(config.seek_forward, SeekStep::Fraction(0.1));
+        assert!(!config.hardware_decoding);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn seek_step_parsing() {
+        assert_eq!(SeekStep::parse("20%"), Some(SeekStep::Fraction(0.2)));
+        assert_eq!(SeekStep::parse(" 7.5s "), Some(SeekStep::Seconds(7.5)));
+        assert_eq!(SeekStep::parse("30"), Some(SeekStep::Seconds(30.0)));
+        assert_eq!(SeekStep::parse("0"), None);
+        assert_eq!(SeekStep::parse("-5s"), None);
+        assert_eq!(SeekStep::parse("abc"), None);
     }
 
     #[test]
@@ -934,20 +1103,24 @@ mod tests {
     #[test]
     fn plain_s_and_d_seek_by_a_fifth() {
         let none = gdk::ModifierType::empty();
-        assert_eq!(shortcut(gdk::Key::s, none), Some(Shortcut::Seek(-0.2)));
-        assert_eq!(shortcut(gdk::Key::d, none), Some(Shortcut::Seek(0.2)));
+        assert_eq!(shortcut(gdk::Key::s, none), Some(Shortcut::Seek(-1)));
+        assert_eq!(shortcut(gdk::Key::d, none), Some(Shortcut::Seek(1)));
         // Caps Lock reports the uppercase key without Shift
-        assert_eq!(shortcut(gdk::Key::D, none), Some(Shortcut::Seek(0.2)));
+        assert_eq!(shortcut(gdk::Key::D, none), Some(Shortcut::Seek(1)));
         assert_eq!(shortcut(gdk::Key::D, gdk::ModifierType::SHIFT_MASK), None);
     }
 
     #[test]
     fn seek_target_clamps_to_the_video() {
         let s = gst::ClockTime::from_seconds;
-        assert_eq!(seek_target(s(10), s(100), 0.2), s(30));
-        assert_eq!(seek_target(s(50), s(100), -0.2), s(30));
-        assert_eq!(seek_target(s(10), s(100), -0.2), s(0));
-        assert_eq!(seek_target(s(90), s(100), 0.2), s(100));
+        assert_eq!(seek_target(s(10), s(100), SeekStep::DEFAULT, 1), s(30));
+        assert_eq!(seek_target(s(50), s(100), SeekStep::DEFAULT, -1), s(30));
+        assert_eq!(seek_target(s(10), s(100), SeekStep::DEFAULT, -1), s(0));
+        assert_eq!(seek_target(s(90), s(100), SeekStep::DEFAULT, 1), s(100));
+        assert_eq!(
+            seek_target(s(50), s(100), SeekStep::Seconds(5.0), -1),
+            s(45)
+        );
     }
 
     #[test]

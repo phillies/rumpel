@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-01
+
 ### Fixed
 
 - Closing a window within 2 seconds of opening it (while another window is open) no longer brings it back as a black window that cannot be closed.

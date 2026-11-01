@@ -529,8 +529,13 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     // size the window to the video's pixel size on load, capped to the monitor
     let size_done = Rc::new(Cell::new(false));
     let current_file = Rc::new(RefCell::new(file.and_then(gio::File::path)));
+    // a window with a file waits for its first present until the video's size is
+    // known. One-shot, and cancelled on close: presenting a destroyed window brings
+    // it back black, and GTK then ignores every further close of it.
+    let pending_present = Rc::new(Cell::new(file.is_some()));
     {
-        let (window, size_done) = (window.clone(), size_done.clone());
+        let (window, size_done, pending_present) =
+            (window.clone(), size_done.clone(), pending_present.clone());
         paintable.connect_invalidate_size(move |p| {
             let (w, h) = (p.intrinsic_width(), p.intrinsic_height());
             if size_done.get() || w <= 0 || h <= 0 {
@@ -555,7 +560,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
             window.set_default_size((w as f64 * scale) as i32, (h as f64 * scale) as i32);
             // sizing before the first present lets the compositor place the
             // window fully on screen (Wayland offers no client-side move)
-            if !window.is_visible() {
+            if pending_present.take() {
                 window.present();
             }
         });
@@ -879,9 +884,10 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     }
 
     {
-        let playbin = playbin.clone();
+        let (playbin, pending_present) = (playbin.clone(), pending_present.clone());
         window.connect_close_request(move |_| {
             let _ = &bus_watch; // keep bus watch alive for the window's lifetime
+            pending_present.set(false);
             let _ = playbin.set_state(gst::State::Null);
             glib::Propagation::Proceed
         });
@@ -901,7 +907,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         );
         let window = window.clone();
         glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
-            if !window.is_visible() {
+            if pending_present.take() {
                 window.present();
             }
         });

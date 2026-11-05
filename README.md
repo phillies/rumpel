@@ -53,6 +53,18 @@ sudo apt install ./rumpel_*_amd64.deb
 sudo dnf install ./rumpel-*.x86_64.rpm
 ```
 
+### Homebrew (macOS and Linux)
+
+This repository is its own Homebrew tap. The formula builds from source and pulls in GTK4 and
+GStreamer, including the good, bad, ugly, and libav plugin sets:
+
+```bash
+brew tap phillies/rumpel https://github.com/phillies/rumpel
+brew install rumpel
+```
+
+`brew upgrade rumpel` picks up new releases; `brew install --HEAD rumpel` builds the latest `main`.
+
 ### Windows: run a release
 
 The Windows zip is self-contained. There is nothing to install beforehand:
@@ -125,27 +137,27 @@ cargo build --release
 
 ### Build from source on Windows
 
-Rumpel builds on Windows with the MSYS2 MINGW64 environment, which provides the GCC toolchain,
+Rumpel builds on Windows with the MSYS2 UCRT64 environment, which provides the GCC toolchain,
 Rust, and the GTK4 and GStreamer development files in one place. The steps below use only MSYS2;
 no separate Rust installer is needed.
 
 1. **Install MSYS2.** Download the installer from [msys2.org](https://www.msys2.org/) and keep the
    default location, `C:\msys64`.
-2. **Open the MINGW64 shell.** From the Start menu, open **MSYS2 MINGW64**. Do not use the plain
-   *MSYS2* or *UCRT64* shells; the commands below assume MINGW64.
+2. **Open the UCRT64 shell.** From the Start menu, open **MSYS2 UCRT64**. Do not use the plain
+   *MSYS2* or *MINGW64* shells; the commands below assume UCRT64.
 3. **Update MSYS2.** Run `pacman -Syu`. If it asks you to close the terminal, close it, reopen
-   **MSYS2 MINGW64**, and run `pacman -Su`.
+   **MSYS2 UCRT64**, and run `pacman -Su`.
 4. **Install the toolchain and libraries:**
 
    ```bash
    pacman -S --needed base-devel \
-     mingw-w64-x86_64-toolchain mingw-w64-x86_64-rust mingw-w64-x86_64-pkgconf \
-     mingw-w64-x86_64-gtk4 mingw-w64-x86_64-gstreamer \
-     mingw-w64-x86_64-gst-plugins-base mingw-w64-x86_64-gst-plugins-good \
-     mingw-w64-x86_64-gst-plugins-bad mingw-w64-x86_64-gst-libav
+     mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-rust mingw-w64-ucrt-x86_64-pkgconf \
+     mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-gstreamer \
+     mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good \
+     mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav
    ```
 
-   `mingw-w64-x86_64-rust` must provide Rust 1.92 or newer; check with `rustc --version`.
+   `mingw-w64-ucrt-x86_64-rust` must provide Rust 1.92 or newer; check with `rustc --version`.
 5. **Get the source.** Clone the repository inside the shell, for example
    `git clone https://github.com/phillies/rumpel && cd rumpel`.
 6. **Build:**
@@ -154,22 +166,22 @@ no separate Rust installer is needed.
    cargo build --release
    ```
 
-7. **Run.** From the same MINGW64 shell:
+7. **Run.** From the same UCRT64 shell:
 
    ```bash
    ./target/release/rumpel.exe video.mp4
    ```
 
-   The MINGW64 shell puts the GTK and GStreamer DLLs on `PATH`. To start `rumpel.exe` from
+   The UCRT64 shell puts the GTK and GStreamer DLLs on `PATH`. To start `rumpel.exe` from
    PowerShell or File Explorer instead, either build the portable zip (below) or add
-   `C:\msys64\mingw64\bin` to your `PATH`.
+   `C:\msys64\ucrt64\bin` to your `PATH`.
 
 **Portable zip.** To produce the same `rumpel-windows-x86_64.zip` that the releases ship, run
-`packaging/windows/bundle.sh` from the MINGW64 shell after the release build. Details are in
+`packaging/windows/bundle.sh` from the UCRT64 shell after the release build. Details are in
 [docs/PACKAGING.md](docs/PACKAGING.md#windows-portable-zip).
 
 Release builds are Windows GUI applications without a console window, so `rumpel --version` may
-print nothing when started from Explorer or PowerShell. Use `cargo run -- --version` in the MINGW64
+print nothing when started from Explorer or PowerShell. Use `cargo run -- --version` in the UCRT64
 shell to see the version.
 
 ## Usage

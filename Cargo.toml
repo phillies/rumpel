@@ -67,13 +67,17 @@ assets = [
 gtk = { package = "gtk4", version = "0.11", features = ["v4_12"] }
 gst = { package = "gstreamer", version = "0.25" }
 
-# GL backends are per platform: the Wayland/X11 crates do not build on Windows.
+# GL backends are per platform: the Wayland/X11 crates do not build on Windows or macOS.
 # Windows uploads frames through GTK instead of GStreamer GL (see src/main.rs);
 # gtk_v4_20 lets the sink hand NV12 straight to GTK instead of converting every
 # frame to RGB in GStreamer first, which drops frames at 4K.
 # MSYS2 ships GTK 4.20+, while Linux distributions may still ship older GTK.
-[target.'cfg(unix)'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 gst-plugin-gtk4 = { version = "0.15", features = ["waylandegl", "x11egl"] }
+
+# macOS has no EGL/X11 GL; the sink renders through GTK without GStreamer GL.
+[target.'cfg(target_os = "macos")'.dependencies]
+gst-plugin-gtk4 = "0.15"
 
 [target.'cfg(windows)'.dependencies]
 gst-plugin-gtk4 = { version = "0.15", features = ["gtk_v4_20"] }

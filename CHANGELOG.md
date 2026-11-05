@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Homebrew formula for macOS and Linux: `brew tap phillies/rumpel https://github.com/phillies/rumpel && brew install rumpel`.
+
+### Fixed
+
+- Windows builds use MSYS2 UCRT64, since MINGW64 no longer ships GTK4 and the GStreamer plugin sets; this unblocks the release workflow.
+- macOS builds no longer request the Linux-only Wayland/X11 GL backends.
+
 ## [0.4.2] - 2026-11-01
 
 ### Fixed

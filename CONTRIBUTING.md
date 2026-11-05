@@ -21,7 +21,7 @@ cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked --all-features
 ```
 
-On Windows, set up the MSYS2 MINGW64 environment as described in
+On Windows, set up the MSYS2 UCRT64 environment as described in
 [Build from source on Windows](README.md#build-from-source-on-windows) and run the same
 commands from that shell. Windows-specific code is gated with `#[cfg(windows)]` or
 `#[cfg(unix)]`; keep both platforms compiling.

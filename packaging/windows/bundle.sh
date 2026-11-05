@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Assemble the portable Windows zip from a release build.
 #
-# Run from the MSYS2 MINGW64 shell after `cargo build --release`:
+# Run from the MSYS2 UCRT64 shell after `cargo build --release`:
 #   packaging/windows/bundle.sh [output-dir]
 #
 # Produces <output-dir>/rumpel-windows-x86_64.zip containing a rumpel/ folder.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-PREFIX="${MINGW_PREFIX:-/mingw64}"
+PREFIX="${MINGW_PREFIX:-/ucrt64}"
 OUT="${1:-$ROOT/target/windows-bundle}"
 DIST="$OUT/rumpel"
 

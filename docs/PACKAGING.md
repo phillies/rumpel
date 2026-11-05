@@ -58,7 +58,7 @@ Neither command installs or deploys the resulting Flatpak.
 
 ## Windows portable zip
 
-The zip is built from the MSYS2 MINGW64 environment, following the setup in the README's
+The zip is built from the MSYS2 UCRT64 environment, following the setup in the README's
 [Build from source on Windows](../README.md#build-from-source-on-windows). After a release build,
 run the bundling script from the same shell:
 
@@ -109,6 +109,10 @@ that element must be added before a Flathub submission.
    runs on every push to `main`, reads `version` from `Cargo.toml`, and if no `v<version>` tag
    exists yet, creates and pushes it and runs the release workflow. Merges that leave the version
    unchanged do not create a release.
+
+5. After the tag exists, point [`Formula/rumpel.rb`](../Formula/rumpel.rb) at it: set `url` to
+   the new tag's tarball and `sha256` to the output of `curl -sL <url> | shasum -a 256`, then
+   merge to `main`. Homebrew users get the release on their next `brew upgrade`.
 
 The release workflow builds the packages and attaches them to a GitHub Release. The publish step
 creates the release if it does not exist and uploads assets with `--clobber` otherwise, so a

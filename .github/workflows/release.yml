@@ -55,6 +55,7 @@ jobs:
           name: rumpel-deb
           path: target/debian/*.deb
           if-no-files-found: error
+          retention-days: 1
 
       - name: Upload release binary
         uses: actions/upload-artifact@v4
@@ -62,6 +63,7 @@ jobs:
           name: rumpel-linux-x86_64
           path: target/release/rumpel
           if-no-files-found: error
+          retention-days: 1
 
   rpm:
     name: RPM package
@@ -98,6 +100,7 @@ jobs:
           name: rumpel-rpm
           path: target/generate-rpm/*.rpm
           if-no-files-found: error
+          retention-days: 1
 
   windows:
     name: Windows portable zip
@@ -139,6 +142,7 @@ jobs:
           name: rumpel-windows-x86_64
           path: target/windows-bundle/rumpel-windows-x86_64.zip
           if-no-files-found: error
+          retention-days: 1
 
   publish:
     name: Publish GitHub Release

@@ -1,6 +1,6 @@
 [package]
 name = "rumpel"
-version = "0.4.3"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.92"
 description = "Minimal GTK4/GStreamer video player"
@@ -34,12 +34,12 @@ assets = [
 # ponytail: explicit requires instead of ELF auto-scan; plugins are dlopened so
 # auto-req would miss them anyway. gstreamer1-libav is RPM Fusion, so only a hint.
 auto-req = "no"
-requires = { gtk4 = "*", gstreamer1 = "*", gstreamer1-plugins-good = "*", gstreamer1-plugins-bad-free = "*", gstreamer1-vaapi = "*" }
+requires = { gtk4 = "*", gstreamer1 = "*", gstreamer1-plugins-good = "*", gstreamer1-plugins-bad-free = "*", gstreamer1-plugins-ugly-free = "*", gstreamer1-vaapi = "*" }
 
 # deb: cargo install cargo-deb && cargo deb
 [package.metadata.deb]
 extended-description = "A minimal video player for Linux. Seek bar, play/pause/stop, loop, volume/mute, media information, folder navigation, Trash, three scaling modes, one window per video."
-depends = "libgtk-4-1, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, gstreamer1.0-vaapi"
+depends = "libgtk-4-1, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, gstreamer1.0-libav, gstreamer1.0-vaapi"
 assets = [
   [
     "target/release/rumpel",

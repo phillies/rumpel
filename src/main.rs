@@ -14,26 +14,39 @@ const VIDEO_EXTENSIONS: &[&str] = &[
     "rmvb",
 ];
 
+// shown with GTK, not GStreamer; formats beyond PNG/JPEG/TIFF need a gdk-pixbuf loader
+const IMAGE_EXTENSIONS: &[&str] = &["bmp", "gif", "jpeg", "jpg", "png", "tif", "tiff", "webp"];
+
 fn is_video_extension(extension: &str) -> bool {
     VIDEO_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
 }
 
-fn is_video_path(path: &Path) -> bool {
+fn is_image_extension(extension: &str) -> bool {
+    IMAGE_EXTENSIONS.contains(&extension.to_ascii_lowercase().as_str())
+}
+
+fn is_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(is_image_extension)
+}
+
+fn is_media_path(path: &Path) -> bool {
     path.is_file()
         && path
             .extension()
             .and_then(|extension| extension.to_str())
-            .is_some_and(is_video_extension)
+            .is_some_and(|extension| is_video_extension(extension) || is_image_extension(extension))
 }
 
-fn folder_videos(path: &Path) -> std::io::Result<Vec<PathBuf>> {
-    let mut videos = std::fs::read_dir(path.parent().unwrap_or(path))?
+fn folder_media(path: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut media = std::fs::read_dir(path.parent().unwrap_or(path))?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|entry| is_video_path(entry))
+        .filter(|entry| is_media_path(entry))
         .collect::<Vec<_>>();
-    videos.sort_by_cached_key(|entry| entry.file_name().unwrap_or_default().to_ascii_lowercase());
-    Ok(videos)
+    media.sort_by_cached_key(|entry| entry.file_name().unwrap_or_default().to_ascii_lowercase());
+    Ok(media)
 }
 
 fn wrapped_neighbor(files: &[PathBuf], current: &Path, offset: isize) -> Option<PathBuf> {
@@ -61,7 +74,7 @@ enum SeekStep {
 }
 
 impl SeekStep {
-    const DEFAULT: SeekStep = SeekStep::Fraction(0.2);
+    const DEFAULT: SeekStep = SeekStep::Fraction(0.1);
 
     /// "20%" or "10s" (a bare number means seconds); None if invalid or not positive
     fn parse(text: &str) -> Option<SeekStep> {
@@ -298,23 +311,71 @@ fn configure_hardware_decoding(enabled: bool) {
     }
 }
 
+/// Sizes the window to the media's pixel size, capped to the monitor.
+fn fit_window(window: &gtk::ApplicationWindow, w: i32, h: i32) {
+    // ponytail: cap at 90% of the monitor to leave room for panels
+    let (mut max_w, mut max_h) = (f64::MAX, f64::MAX);
+    if let Some(display) = gdk::Display::default() {
+        // window may not be mapped yet: fall back to the first monitor
+        let mon = window
+            .surface()
+            .and_then(|s| display.monitor_at_surface(&s))
+            .or_else(|| display.monitors().item(0).and_downcast::<gdk::Monitor>());
+        if let Some(mon) = mon {
+            let g = mon.geometry();
+            max_w = g.width() as f64 * 0.9;
+            max_h = g.height() as f64 * 0.9;
+        }
+    }
+    let scale = (max_w / w as f64).min(max_h / h as f64).min(1.0);
+    window.set_default_size((w as f64 * scale) as i32, (h as f64 * scale) as i32);
+}
+
+#[allow(clippy::too_many_arguments)]
 fn load_file(
     playbin: &gst::Element,
     window: &gtk::ApplicationWindow,
+    picture: &gtk::Picture,
+    video: &gdk::Paintable,
     play_btn: &gtk::ToggleButton,
     size_done: &Cell<bool>,
     current_file: &RefCell<Option<PathBuf>>,
     info_label: &gtk::Label,
     file: &gio::File,
 ) {
+    let image = file.path().is_some_and(|path| is_image_path(&path));
+    if image {
+        // untoggle while the video is still shown: the toggle handler pauses it
+        play_btn.set_active(false);
+    }
     let _ = playbin.set_state(gst::State::Null);
-    size_done.set(false);
+    size_done.set(image);
     current_file.replace(file.path());
-    info_label.set_text("Loading media information...");
-    playbin.set_property("uri", file.uri().as_str());
     if let Some(name) = file.basename() {
         window.set_title(Some(&name.to_string_lossy()));
     }
+    if image {
+        match gdk::Texture::from_file(file) {
+            Ok(texture) => {
+                fit_window(window, texture.width(), texture.height());
+                info_label.set_text(&format!(
+                    "Image\nResolution: {}x{}",
+                    texture.width(),
+                    texture.height()
+                ));
+                picture.set_paintable(Some(&texture));
+            }
+            Err(error) => {
+                eprintln!("Could not load image: {error}");
+                info_label.set_text("The image could not be loaded.");
+                picture.set_paintable(gdk::Paintable::NONE);
+            }
+        }
+        return;
+    }
+    picture.set_paintable(Some(video));
+    info_label.set_text("Loading media information...");
+    playbin.set_property("uri", file.uri().as_str());
     play_btn.set_active(true);
     let _ = playbin.set_state(gst::State::Playing);
 }
@@ -401,7 +462,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     let fit_dd = gtk::DropDown::from_strings(&["Fit", "Stretch", "Cover"]);
     fit_dd.set_tooltip_text(Some("Scaling"));
     let open_btn = gtk::Button::from_icon_name("folder-open-symbolic");
-    open_btn.set_tooltip_text(Some("Open video"));
+    open_btn.set_tooltip_text(Some("Open video or image"));
     let info_btn = gtk::ToggleButton::builder()
         .icon_name("dialog-information-symbolic")
         .tooltip_text("Media information")
@@ -529,10 +590,13 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     // size the window to the video's pixel size on load, capped to the monitor
     let size_done = Rc::new(Cell::new(false));
     let current_file = Rc::new(RefCell::new(file.and_then(gio::File::path)));
-    // a window with a file waits for its first present until the video's size is
-    // known. One-shot, and cancelled on close: presenting a destroyed window brings
-    // it back black, and GTK then ignores every further close of it.
-    let pending_present = Rc::new(Cell::new(file.is_some()));
+    // a window with a video waits for its first present until the video's size is
+    // known (an image is sized while loading). One-shot, and cancelled on close:
+    // presenting a destroyed window brings it back black, and GTK then ignores
+    // every further close of it.
+    let pending_present = Rc::new(Cell::new(
+        file.is_some() && !current_file.borrow().as_deref().is_some_and(is_image_path),
+    ));
     {
         let (window, size_done, pending_present) =
             (window.clone(), size_done.clone(), pending_present.clone());
@@ -542,22 +606,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                 return;
             }
             size_done.set(true);
-            // ponytail: cap at 90% of the monitor to leave room for panels
-            let (mut max_w, mut max_h) = (f64::MAX, f64::MAX);
-            if let Some(display) = gdk::Display::default() {
-                // window may not be mapped yet: fall back to the first monitor
-                let mon = window
-                    .surface()
-                    .and_then(|s| display.monitor_at_surface(&s))
-                    .or_else(|| display.monitors().item(0).and_downcast::<gdk::Monitor>());
-                if let Some(mon) = mon {
-                    let g = mon.geometry();
-                    max_w = g.width() as f64 * 0.9;
-                    max_h = g.height() as f64 * 0.9;
-                }
-            }
-            let scale = (max_w / w as f64).min(max_h / h as f64).min(1.0);
-            window.set_default_size((w as f64 * scale) as i32, (h as f64 * scale) as i32);
+            fit_window(&window, w, h);
             // sizing before the first present lets the compositor place the
             // window fully on screen (Wayland offers no client-side move)
             if pending_present.take() {
@@ -601,8 +650,13 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     }
 
     {
-        let playbin = playbin.clone();
+        let (playbin, picture, paintable) = (playbin.clone(), picture.clone(), paintable.clone());
         play_btn.connect_toggled(move |b| {
+            // an image (or nothing) is shown: the pipeline still holds the last video
+            if picture.paintable().as_ref() != Some(&paintable) {
+                b.set_active(false);
+                return;
+            }
             if b.is_active() {
                 b.set_icon_name("media-playback-pause-symbolic");
                 let _ = playbin.set_state(gst::State::Playing);
@@ -641,15 +695,24 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
 
     // position/duration poll; dies with the window (root() gone)
     glib::timeout_add_local(std::time::Duration::from_millis(500), {
-        let (playbin, seek, pos_lbl, dur_lbl) = (
+        let (playbin, seek, pos_lbl, dur_lbl, picture, paintable) = (
             playbin.clone(),
             seek.clone(),
             pos_lbl.clone(),
             dur_lbl.clone(),
+            picture.clone(),
+            paintable.clone(),
         );
         move || {
             if seek.root().is_none() {
                 return glib::ControlFlow::Break;
+            }
+            // images have no timeline; clear the last video's
+            if picture.paintable().as_ref() != Some(&paintable) {
+                seek.set_value(0.0);
+                pos_lbl.set_text("0:00");
+                dur_lbl.set_text("0:00");
+                return glib::ControlFlow::Continue;
             }
             if let Some(dur) = playbin.query_duration::<gst::ClockTime>() {
                 seek.set_range(0.0, (dur.nseconds() as f64 / 1e9).max(0.1));
@@ -714,15 +777,17 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
         .unwrap();
 
     {
-        let (playbin, window, play_btn, size_done, current_file, info_label, open_btn) = (
+        let (playbin, window, picture, paintable, play_btn, size_done, current_file, info_label) = (
             playbin.clone(),
             window.clone(),
+            picture.clone(),
+            paintable.clone(),
             play_btn.clone(),
             size_done.clone(),
             current_file.clone(),
             info_label.clone(),
-            open_btn.clone(),
         );
+        let open_btn = open_btn.clone();
         let config = config.clone();
         let key = gtk::EventControllerKey::new();
         key.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -758,11 +823,13 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                     // still be borrowed (an if-let borrow lives through its body)
                     let current = current_file.borrow().clone();
                     if let Some(current) = current {
-                        if let Ok(files) = folder_videos(&current) {
+                        if let Ok(files) = folder_media(&current) {
                             if let Some(next) = wrapped_neighbor(&files, &current, offset) {
                                 load_file(
                                     &playbin,
                                     &key_window,
+                                    &picture,
+                                    &paintable,
                                     &play_btn,
                                     &size_done,
                                     &current_file,
@@ -777,7 +844,7 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                     let Some(current) = current_file.borrow().clone() else {
                         return glib::Propagation::Stop;
                     };
-                    let successor = folder_videos(&current)
+                    let successor = folder_media(&current)
                         .ok()
                         .and_then(|files| wrapped_neighbor(&files, &current, 1))
                         .filter(|next| next != &current);
@@ -787,14 +854,15 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                     // handler pauses the pipeline, which would reopen the file.
                     play_btn.set_active(false);
                     let _ = playbin.set_state(gst::State::Null);
-                    let (playbin, play_btn, size_done, current_file, info_label, window) = (
+                    let (playbin, picture, paintable, play_btn, size_done, current_file) = (
                         playbin.clone(),
+                        picture.clone(),
+                        paintable.clone(),
                         play_btn.clone(),
                         size_done.clone(),
                         current_file.clone(),
-                        info_label.clone(),
-                        key_window.clone(),
                     );
+                    let (info_label, window) = (info_label.clone(), key_window.clone());
                     file.trash_async(
                         glib::Priority::DEFAULT,
                         gio::Cancellable::NONE,
@@ -814,6 +882,8 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                                 load_file(
                                     &playbin,
                                     &window,
+                                    &picture,
+                                    &paintable,
                                     &play_btn,
                                     &size_done,
                                     &current_file,
@@ -821,6 +891,8 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
                                     &gio::File::for_path(next),
                                 );
                             } else {
+                                // do not keep showing what was just trashed
+                                picture.set_paintable(gdk::Paintable::NONE);
                                 current_file.replace(None);
                                 info_label.set_text("No video is loaded.");
                                 window.set_title(Some("Rumpel"));
@@ -835,40 +907,47 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     }
 
     {
-        let (app, window, playbin, play_btn, size_done, current_file, info_label) = (
+        let (app, window, playbin, picture, paintable, play_btn, size_done, current_file) = (
             app.clone(),
             window.clone(),
             playbin.clone(),
+            picture.clone(),
+            paintable.clone(),
             play_btn.clone(),
             size_done.clone(),
             current_file.clone(),
-            info_label.clone(),
         );
+        let info_label = info_label.clone();
         open_btn.connect_clicked(move |_| {
             let filter = gtk::FileFilter::new();
             filter.add_mime_type("video/*");
-            filter.set_name(Some("Videos"));
+            filter.add_mime_type("image/*");
+            filter.set_name(Some("Videos and images"));
             let filters = gio::ListStore::new::<gtk::FileFilter>();
             filters.append(&filter);
             let dialog = gtk::FileDialog::builder().filters(&filters).build();
-            let (app, win, playbin, play_btn, size_done, current_file, info_label) = (
+            let (app, win, playbin, picture, paintable, play_btn, size_done, current_file) = (
                 app.clone(),
                 window.clone(),
                 playbin.clone(),
+                picture.clone(),
+                paintable.clone(),
                 play_btn.clone(),
                 size_done.clone(),
                 current_file.clone(),
-                info_label.clone(),
             );
+            let info_label = info_label.clone();
             dialog.open(Some(&window), gio::Cancellable::NONE, move |res| {
                 if let Ok(file) = res {
-                    // empty window (never loaded, or its last video was trashed):
-                    // load here; otherwise a new window per video
+                    // empty window (never loaded, or its last file was trashed):
+                    // load here; otherwise a new window per file
                     let empty = current_file.borrow().is_none();
                     if empty {
                         load_file(
                             &playbin,
                             &win,
+                            &picture,
+                            &paintable,
                             &play_btn,
                             &size_done,
                             &current_file,
@@ -894,17 +973,21 @@ fn build_window(app: &gtk::Application, file: Option<&gio::File>) {
     }
 
     if let Some(f) = file {
-        // present happens in the invalidate-size handler, once the video's
-        // size is known; fallback covers audio-only or broken files
         load_file(
             &playbin,
             &window,
+            &picture,
+            &paintable,
             &play_btn,
             &size_done,
             &current_file,
             &info_label,
             f,
         );
+    }
+    if pending_present.get() {
+        // present happens in the invalidate-size handler, once the video's
+        // size is known; fallback covers audio-only or broken files
         let window = window.clone();
         glib::timeout_add_local_once(std::time::Duration::from_secs(2), move || {
             if pending_present.take() {
@@ -997,8 +1080,8 @@ fn main() -> glib::ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        fmt_time, is_video_extension, seek_target, shortcut, version_requested, wrapped_neighbor,
-        SeekStep, Shortcut,
+        fmt_time, is_image_extension, is_image_path, is_video_extension, seek_target, shortcut,
+        version_requested, wrapped_neighbor, SeekStep, Shortcut,
     };
     use gtk::gdk;
     use std::path::PathBuf;
@@ -1107,7 +1190,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_s_and_d_seek_by_a_fifth() {
+    fn plain_s_and_d_seek() {
         let none = gdk::ModifierType::empty();
         assert_eq!(shortcut(gdk::Key::s, none), Some(Shortcut::Seek(-1)));
         assert_eq!(shortcut(gdk::Key::d, none), Some(Shortcut::Seek(1)));
@@ -1119,10 +1202,11 @@ mod tests {
     #[test]
     fn seek_target_clamps_to_the_video() {
         let s = gst::ClockTime::from_seconds;
-        assert_eq!(seek_target(s(10), s(100), SeekStep::DEFAULT, 1), s(30));
-        assert_eq!(seek_target(s(50), s(100), SeekStep::DEFAULT, -1), s(30));
-        assert_eq!(seek_target(s(10), s(100), SeekStep::DEFAULT, -1), s(0));
-        assert_eq!(seek_target(s(90), s(100), SeekStep::DEFAULT, 1), s(100));
+        // the default jumps by a tenth of the duration
+        assert_eq!(seek_target(s(10), s(100), SeekStep::DEFAULT, 1), s(20));
+        assert_eq!(seek_target(s(50), s(100), SeekStep::DEFAULT, -1), s(40));
+        assert_eq!(seek_target(s(5), s(100), SeekStep::DEFAULT, -1), s(0));
+        assert_eq!(seek_target(s(95), s(100), SeekStep::DEFAULT, 1), s(100));
         assert_eq!(
             seek_target(s(50), s(100), SeekStep::Seconds(5.0), -1),
             s(45)
@@ -1135,5 +1219,15 @@ mod tests {
         assert!(is_video_extension("mpv"));
         assert!(is_video_extension("wmv"));
         assert!(!is_video_extension("txt"));
+    }
+
+    #[test]
+    fn images_are_recognised_by_extension() {
+        assert!(is_image_extension("JPG"));
+        assert!(is_image_extension("webp"));
+        assert!(!is_image_extension("mkv"));
+        assert!(is_image_path(&PathBuf::from("holiday/Beach.PNG")));
+        assert!(!is_image_path(&PathBuf::from("clip.mp4")));
+        assert!(!is_image_path(&PathBuf::from("png")));
     }
 }

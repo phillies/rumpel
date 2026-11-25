@@ -6,4 +6,4 @@ Exec=/usr/bin/rumpel %U
 Icon=io.lies.rumpel
 Terminal=false
 Categories=AudioVideo;Video;Player;
-MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;video/x-flv;video/x-ms-wmv;
+MimeType=video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;video/x-flv;video/x-ms-wmv;image/png;image/jpeg;image/gif;image/bmp;image/tiff;image/webp;

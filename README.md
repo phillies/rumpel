@@ -6,7 +6,7 @@
 
 **RU**st **M**edia **P**lay**E**r for **L**inux
 
-A minimal GTK4 + GStreamer video player for Linux and Windows. One window per video, one control bar, nothing else.
+A minimal GTK4 + GStreamer video player and image viewer for Linux and Windows. One window per file, one control bar, nothing else.
 
 [![CI](https://github.com/phillies/rumpel/actions/workflows/ci.yml/badge.svg)](https://github.com/phillies/rumpel/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/phillies/rumpel?color=blue)](https://github.com/phillies/rumpel/releases/latest)
@@ -29,7 +29,7 @@ double-clicked and get out of the way.
 
 - **One window per video.** Open five files, get five windows. No playlist, no queue.
 - **One control bar.** Seek, play/pause, stop, loop, mute, volume, scaling, open, info.
-- **Folder-native.** <kbd>←</kbd> / <kbd>→</kbd> walk the videos next to the current file, and
+- **Folder-native.** <kbd>←</kbd> / <kbd>→</kbd> walk the videos and images next to the current file, and
   <kbd>Ctrl</kbd>+<kbd>X</kbd> trashes the current one and moves on — a fast way to triage a
   directory of clips.
 - **Nothing to configure.** Mute and loop are remembered; everything else is a click.
@@ -73,9 +73,10 @@ The Windows zip is self-contained. There is nothing to install beforehand:
 2. Unzip it anywhere, for example `%LOCALAPPDATA%\Programs\Rumpel`.
 3. Run `rumpel\rumpel.exe`, or right-click a video and choose **Open with** → `rumpel.exe`.
 
-The zip bundles GTK4, GStreamer with the good, bad, and libav plugin sets (common H.264 and H.265
-decoders), and the icon theme. Hardware decoding uses Direct3D 12 or 11 through the GPU driver you
-already have. The first start takes a few seconds longer while GStreamer indexes its plugins.
+The zip bundles GTK4, GStreamer with the good, bad, ugly, and libav plugin sets (common H.264,
+H.265, WMV, and MPEG decoders), and the icon theme. Hardware decoding uses Direct3D 12 or 11
+through the GPU driver you already have. The first start takes a few seconds longer while
+GStreamer indexes its plugins.
 
 Windows may show a SmartScreen warning because the executable is not code-signed: choose
 **More info** → **Run anyway**.
@@ -87,7 +88,8 @@ Windows may show a SmartScreen warning because the executable is not code-signed
 
 ```bash
 sudo dnf install gtk4 gstreamer1 gstreamer1-plugins-good \
-  gstreamer1-plugins-bad-free gstreamer1-libav gstreamer1-vaapi
+  gstreamer1-plugins-bad-free gstreamer1-plugins-ugly-free \
+  gstreamer1-libav gstreamer1-vaapi
 ```
 
 </details>
@@ -97,7 +99,8 @@ sudo dnf install gtk4 gstreamer1 gstreamer1-plugins-good \
 
 ```bash
 sudo apt install libgtk-4-1 gstreamer1.0-plugins-good \
-  gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-vaapi
+  gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+  gstreamer1.0-libav gstreamer1.0-vaapi
 ```
 
 </details>
@@ -154,7 +157,8 @@ no separate Rust installer is needed.
      mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-rust mingw-w64-ucrt-x86_64-pkgconf \
      mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-gstreamer \
      mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good \
-     mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav
+     mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-plugins-ugly \
+     mingw-w64-ucrt-x86_64-gst-libav
    ```
 
    `mingw-w64-ucrt-x86_64-rust` must provide Rust 1.92 or newer; check with `rustc --version`.
@@ -199,18 +203,20 @@ Opening a video from a window that already has one creates a new window.
 
 | Input | Action |
 | --- | --- |
-| <kbd>←</kbd> or <kbd>Ctrl</kbd>+<kbd>S</kbd> | Previous video in the current directory |
-| <kbd>→</kbd> or <kbd>Ctrl</kbd>+<kbd>D</kbd> | Next video in the current directory |
-| <kbd>S</kbd> | Jump back by 20% of the video's length |
-| <kbd>D</kbd> | Jump forward by 20% of the video's length |
-| <kbd>Ctrl</kbd>+<kbd>O</kbd> | Open a video |
-| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Move the current video to Trash, open the next one |
+| <kbd>←</kbd> or <kbd>Ctrl</kbd>+<kbd>S</kbd> | Previous video or image in the current directory |
+| <kbd>→</kbd> or <kbd>Ctrl</kbd>+<kbd>D</kbd> | Next video or image in the current directory |
+| <kbd>S</kbd> | Jump back by 10% of the video's length |
+| <kbd>D</kbd> | Jump forward by 10% of the video's length |
+| <kbd>Ctrl</kbd>+<kbd>O</kbd> | Open a video or image |
+| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Move the current file to Trash, open the next one |
 | Click on video | Play / pause |
 | Double-click on video | Toggle fullscreen |
 | Info button | Toggle the media-information overlay |
 
-Folder navigation covers common Matroska, MP4, WebM, AVI, MPEG, FLV, and WMV extensions, orders
-files case-insensitively, and wraps at either end.
+Folder navigation covers common Matroska, MP4, WebM, AVI, MPEG, FLV, and WMV extensions plus PNG,
+JPEG, GIF, BMP, TIFF, and WebP images, orders files case-insensitively, and wraps at either end.
+Images show in the same window; play, seek, and <kbd>S</kbd> / <kbd>D</kbd> do nothing for them, and
+an animated GIF shows its first frame.
 
 Settings live in `$XDG_CONFIG_HOME/rumpel.conf` on Linux and `%LOCALAPPDATA%\rumpel.conf` on
 Windows. Mute and loop are saved automatically; the rest is edited by hand (the options are
@@ -218,9 +224,9 @@ written to the file on first save):
 
 ```ini
 [seek]
-# S and D: percent of the duration ("20%") or seconds ("10s")
-backward=20%
-forward=20%
+# S and D: percent of the duration ("10%") or seconds ("10s")
+backward=10%
+forward=10%
 
 [decoding]
 # prefer VA/NVDEC/D3D11/V4L2 decoders; false forces software decoding

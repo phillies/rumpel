@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-25
+
 ### Added
 
 - Images (PNG, JPEG, GIF, BMP, TIFF, WebP) open in the player window. Folder navigation and Trash cover them alongside videos; the timeline and `S`/`D` do nothing for them.

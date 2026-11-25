@@ -6,7 +6,7 @@
 
 **RU**st **M**edia **P**lay**E**r for **L**inux
 
-A minimal GTK4 + GStreamer video player for Linux and Windows. One window per video, one control bar, nothing else.
+A minimal GTK4 + GStreamer video player and image viewer for Linux and Windows. One window per file, one control bar, nothing else.
 
 [![CI](https://github.com/phillies/rumpel/actions/workflows/ci.yml/badge.svg)](https://github.com/phillies/rumpel/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/phillies/rumpel?color=blue)](https://github.com/phillies/rumpel/releases/latest)
@@ -29,7 +29,7 @@ double-clicked and get out of the way.
 
 - **One window per video.** Open five files, get five windows. No playlist, no queue.
 - **One control bar.** Seek, play/pause, stop, loop, mute, volume, scaling, open, info.
-- **Folder-native.** <kbd>←</kbd> / <kbd>→</kbd> walk the videos next to the current file, and
+- **Folder-native.** <kbd>←</kbd> / <kbd>→</kbd> walk the videos and images next to the current file, and
   <kbd>Ctrl</kbd>+<kbd>X</kbd> trashes the current one and moves on — a fast way to triage a
   directory of clips.
 - **Nothing to configure.** Mute and loop are remembered; everything else is a click.
@@ -203,18 +203,20 @@ Opening a video from a window that already has one creates a new window.
 
 | Input | Action |
 | --- | --- |
-| <kbd>←</kbd> or <kbd>Ctrl</kbd>+<kbd>S</kbd> | Previous video in the current directory |
-| <kbd>→</kbd> or <kbd>Ctrl</kbd>+<kbd>D</kbd> | Next video in the current directory |
-| <kbd>S</kbd> | Jump back by 20% of the video's length |
-| <kbd>D</kbd> | Jump forward by 20% of the video's length |
-| <kbd>Ctrl</kbd>+<kbd>O</kbd> | Open a video |
-| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Move the current video to Trash, open the next one |
+| <kbd>←</kbd> or <kbd>Ctrl</kbd>+<kbd>S</kbd> | Previous video or image in the current directory |
+| <kbd>→</kbd> or <kbd>Ctrl</kbd>+<kbd>D</kbd> | Next video or image in the current directory |
+| <kbd>S</kbd> | Jump back by 10% of the video's length |
+| <kbd>D</kbd> | Jump forward by 10% of the video's length |
+| <kbd>Ctrl</kbd>+<kbd>O</kbd> | Open a video or image |
+| <kbd>Ctrl</kbd>+<kbd>X</kbd> | Move the current file to Trash, open the next one |
 | Click on video | Play / pause |
 | Double-click on video | Toggle fullscreen |
 | Info button | Toggle the media-information overlay |
 
-Folder navigation covers common Matroska, MP4, WebM, AVI, MPEG, FLV, and WMV extensions, orders
-files case-insensitively, and wraps at either end.
+Folder navigation covers common Matroska, MP4, WebM, AVI, MPEG, FLV, and WMV extensions plus PNG,
+JPEG, GIF, BMP, TIFF, and WebP images, orders files case-insensitively, and wraps at either end.
+Images show in the same window; play, seek, and <kbd>S</kbd> / <kbd>D</kbd> do nothing for them, and
+an animated GIF shows its first frame.
 
 Settings live in `$XDG_CONFIG_HOME/rumpel.conf` on Linux and `%LOCALAPPDATA%\rumpel.conf` on
 Windows. Mute and loop are saved automatically; the rest is edited by hand (the options are
@@ -222,9 +224,9 @@ written to the file on first save):
 
 ```ini
 [seek]
-# S and D: percent of the duration ("20%") or seconds ("10s")
-backward=20%
-forward=20%
+# S and D: percent of the duration ("10%") or seconds ("10s")
+backward=10%
+forward=10%
 
 [decoding]
 # prefer VA/NVDEC/D3D11/V4L2 decoders; false forces software decoding

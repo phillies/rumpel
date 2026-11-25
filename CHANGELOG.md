@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Images (PNG, JPEG, GIF, BMP, TIFF, WebP) open in the player window. Folder navigation and Trash cover them alongside videos; the timeline and `S`/`D` do nothing for them.
+
+### Changed
+
+- `S`/`D` jump by 10% of the video's length by default instead of 20%. A `rumpel.conf` that already lists `[seek]` keeps its values.
+
 ### Fixed
 
 - WMV and other ASF files play: the Windows zip bundles GStreamer's ugly plugin set, which has the ASF demuxer, and the Linux packages depend on it.

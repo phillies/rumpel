@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- WMV and other ASF files play: the Windows zip bundles GStreamer's ugly plugin set, which has the ASF demuxer, and the Linux packages depend on it.
+
 ## [0.4.3] - 2026-11-05
 
 ### Added

@@ -73,9 +73,10 @@ The Windows zip is self-contained. There is nothing to install beforehand:
 2. Unzip it anywhere, for example `%LOCALAPPDATA%\Programs\Rumpel`.
 3. Run `rumpel\rumpel.exe`, or right-click a video and choose **Open with** → `rumpel.exe`.
 
-The zip bundles GTK4, GStreamer with the good, bad, and libav plugin sets (common H.264 and H.265
-decoders), and the icon theme. Hardware decoding uses Direct3D 12 or 11 through the GPU driver you
-already have. The first start takes a few seconds longer while GStreamer indexes its plugins.
+The zip bundles GTK4, GStreamer with the good, bad, ugly, and libav plugin sets (common H.264,
+H.265, WMV, and MPEG decoders), and the icon theme. Hardware decoding uses Direct3D 12 or 11
+through the GPU driver you already have. The first start takes a few seconds longer while
+GStreamer indexes its plugins.
 
 Windows may show a SmartScreen warning because the executable is not code-signed: choose
 **More info** → **Run anyway**.
@@ -87,7 +88,8 @@ Windows may show a SmartScreen warning because the executable is not code-signed
 
 ```bash
 sudo dnf install gtk4 gstreamer1 gstreamer1-plugins-good \
-  gstreamer1-plugins-bad-free gstreamer1-libav gstreamer1-vaapi
+  gstreamer1-plugins-bad-free gstreamer1-plugins-ugly-free \
+  gstreamer1-libav gstreamer1-vaapi
 ```
 
 </details>
@@ -97,7 +99,8 @@ sudo dnf install gtk4 gstreamer1 gstreamer1-plugins-good \
 
 ```bash
 sudo apt install libgtk-4-1 gstreamer1.0-plugins-good \
-  gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-vaapi
+  gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+  gstreamer1.0-libav gstreamer1.0-vaapi
 ```
 
 </details>
@@ -154,7 +157,8 @@ no separate Rust installer is needed.
      mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-rust mingw-w64-ucrt-x86_64-pkgconf \
      mingw-w64-ucrt-x86_64-gtk4 mingw-w64-ucrt-x86_64-gstreamer \
      mingw-w64-ucrt-x86_64-gst-plugins-base mingw-w64-ucrt-x86_64-gst-plugins-good \
-     mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-libav
+     mingw-w64-ucrt-x86_64-gst-plugins-bad mingw-w64-ucrt-x86_64-gst-plugins-ugly \
+     mingw-w64-ucrt-x86_64-gst-libav
    ```
 
    `mingw-w64-ucrt-x86_64-rust` must provide Rust 1.92 or newer; check with `rustc --version`.
